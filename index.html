@@ -418,12 +418,13 @@
             localStorage.setItem('smart_parts_projects', JSON.stringify(appState.projects));
             localStorage.setItem('smart_parts_current_prj', appState.currentProject);
 
-            // Firebase 클라우드 연결 상태라면 클라우드 DB에도 실시간 동기화 업데이트
+            // Firebase 클라우드 연결 상태라면 클라우드 DB에도 실시간 동기화 업데이트 (Deep copy & clean payload)
             if (isFirebaseConnected && db) {
+                const currentData = appState.projects[appState.currentProject] || [];
                 db.collection('projects').doc(appState.currentProject).set({
-                    parts: appState.projects[appState.currentProject],
+                    parts: JSON.parse(JSON.stringify(currentData)),
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                }, { merge: true }).catch(err => console.error("Firebase Sync Error:", err));
+                }).catch(err => console.error("Firebase Sync Error:", err));
             }
         }
 
@@ -460,11 +461,15 @@
                 .onSnapshot(doc => {
                     if (doc.exists) {
                         const data = doc.data();
-                        if (data && data.parts) {
+                        if (data && Array.isArray(data.parts)) {
+                            // 원격 파이어베이스 데이터로 로컬 덮어쓰기 후 즉시 UI 업데이트
                             appState.projects[appState.currentProject] = data.parts;
                             localStorage.setItem('smart_parts_projects', JSON.stringify(appState.projects));
                             renderApp();
                         }
+                    } else {
+                        // 문서가 아직 클라우드에 존재하지 않을 경우 현재 데이터 전송 생성
+                        saveData();
                     }
                 }, err => {
                     console.error("Snapshot error:", err);
