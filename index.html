@@ -518,7 +518,9 @@
 
         function checkPartReady(part) {
             if (!part.isCompleted) return false;
-            const reqs = part.requiredProcesses || PROCESS_LIST.map(p => p.key);
+            const reqs = part.requiredProcesses || [];
+            // 공정이 없는(빈칸) 부품은 최종 선별 완료만 되면 바로 READY 처리
+            if (reqs.length === 0) return true;
             return reqs.every(procKey => part.processes && part.processes[procKey]);
         }
 
@@ -590,7 +592,7 @@
         function createPartCardHTML(part) {
             const isReady = checkPartReady(part);
             const isSelector = appState.userRole === 'SELECTOR';
-            const reqs = part.requiredProcesses || PROCESS_LIST.map(p => p.key);
+            const reqs = part.requiredProcesses || [];
             const matClass = MATERIAL_COLORS[part.material] || MATERIAL_COLORS['DEFAULT'];
 
             return `
@@ -622,6 +624,7 @@
                             <p class="text-xs font-medium text-slate-300 mt-1">${part.partName}</p>
                         </div>
 
+                        ${reqs.length > 0 ? `
                         <div class="my-3">
                             <div class="flex justify-between items-center mb-1.5">
                                 <span class="text-[11px] font-medium text-slate-400">필요 공정 (${reqs.length}개):</span>
@@ -649,6 +652,7 @@
                                 }).join('')}
                             </div>
                         </div>
+                        ` : ''}
                     </div>
 
                     <div class="pt-3 border-t border-slate-700/80 flex items-center justify-between mt-2">
@@ -683,7 +687,7 @@
         function createPartRowHTML(part) {
             const isReady = checkPartReady(part);
             const isSelector = appState.userRole === 'SELECTOR';
-            const reqs = part.requiredProcesses || PROCESS_LIST.map(p => p.key);
+            const reqs = part.requiredProcesses || [];
             const matClass = MATERIAL_COLORS[part.material] || MATERIAL_COLORS['DEFAULT'];
 
             return `
@@ -705,7 +709,7 @@
                     </div>
 
                     <div class="flex flex-wrap gap-1">
-                        ${PROCESS_LIST.map(proc => {
+                        ${reqs.length > 0 ? PROCESS_LIST.map(proc => {
                             if (!reqs.includes(proc.key)) return '';
                             const isDone = part.processes && part.processes[proc.key];
                             return `
@@ -713,7 +717,7 @@
                                     ${proc.label}
                                 </button>
                             `;
-                        }).join('')}
+                        }).join('') : '<span class="text-xs text-slate-500 font-sans">공정없음</span>'}
                     </div>
 
                     <div class="flex items-center gap-3">
@@ -846,6 +850,12 @@
             document.getElementById('confirmDeleteProjectBtn').addEventListener('click', () => {
                 const projectToDelete = appState.currentProject;
                 delete appState.projects[projectToDelete];
+
+                // Firebase 클라우드에서도 해당 프로젝트 문서 완전 삭제
+                if (isFirebaseConnected && db) {
+                    db.collection('projects').doc(projectToDelete).delete()
+                        .catch(err => console.error("Firebase Project Delete Error:", err));
+                }
 
                 const remainingProjects = Object.keys(appState.projects);
                 if (remainingProjects.length > 0) {
@@ -1017,17 +1027,22 @@
 
                     // 1. 적용공정 / 공정 란 파싱 (문자열 방식)
                     const rawProcStr = row['적용공정'] || row['공정'] || row['Processes'];
-                    if (rawProcStr && typeof rawProcStr === 'string' && rawProcStr.trim() !== '') {
+                    const isBlankProcStr = !rawProcStr || String(rawProcStr).trim() === '' || ['N/A', '-', '없음', 'NONE'].includes(String(rawProcStr).trim().toUpperCase());
+
+                    if (!isBlankProcStr && typeof rawProcStr === 'string') {
                         PROCESS_LIST.forEach(proc => {
                             if (rawProcStr.toLowerCase().includes(proc.label.toLowerCase()) || rawProcStr.toLowerCase().includes(proc.key)) {
                                 requiredProcesses.push(proc.key);
                             }
                         });
+                    } else if (isBlankProcStr) {
+                        // 공정란이 완전 빈칸인 경우 필요 공정 목록을 빈 배열([])로 고정
+                        requiredProcesses = [];
                     } else {
                         // 2. 공정별 열(절단, MCT 등) 개별 확인
                         PROCESS_LIST.forEach(proc => {
                             const val = row[proc.label] || row[proc.key];
-                            if (val !== undefined && val !== null && String(val).trim() !== '' && String(val).trim() !== 'N/A') {
+                            if (val !== undefined && val !== null && String(val).trim() !== '' && String(val).trim() !== 'N/A' && String(val).trim() !== '-') {
                                 requiredProcesses.push(proc.key);
                             }
                         });
