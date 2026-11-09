@@ -1013,26 +1013,45 @@
 
                 const importedParts = json.map((row, idx) => {
                     let requiredProcesses = [];
+                    const processesState = {};
 
+                    // 1. 적용공정 / 공정 란 파싱 (문자열 방식)
                     const rawProcStr = row['적용공정'] || row['공정'] || row['Processes'];
-                    if (rawProcStr && typeof rawProcStr === 'string') {
+                    if (rawProcStr && typeof rawProcStr === 'string' && rawProcStr.trim() !== '') {
                         PROCESS_LIST.forEach(proc => {
                             if (rawProcStr.toLowerCase().includes(proc.label.toLowerCase()) || rawProcStr.toLowerCase().includes(proc.key)) {
                                 requiredProcesses.push(proc.key);
                             }
                         });
                     } else {
+                        // 2. 공정별 열(절단, MCT 등) 개별 확인
                         PROCESS_LIST.forEach(proc => {
                             const val = row[proc.label] || row[proc.key];
-                            if (val && (val === 'O' || val === 'Y' || val === 1 || val === 'o' || val === 'y' || val === '완료' || val === '대기')) {
+                            if (val !== undefined && val !== null && String(val).trim() !== '' && String(val).trim() !== 'N/A') {
                                 requiredProcesses.push(proc.key);
                             }
                         });
                     }
 
-                    if (requiredProcesses.length === 0) {
-                        requiredProcesses = PROCESS_LIST.map(p => p.key);
-                    }
+                    // 3. 각 공정별 완료 여부 수신 ('완료', 'O', 'Y', '1' 등)
+                    requiredProcesses.forEach(procKey => {
+                        const procObj = PROCESS_LIST.find(p => p.key === procKey);
+                        const label = procObj ? procObj.label : procKey;
+                        const val = String(row[label] || row[procKey] || '').trim().toUpperCase();
+
+                        if (['완료', 'O', 'Y', '1', 'TRUE', 'READY'].includes(val)) {
+                            processesState[procKey] = true;
+                        } else {
+                            processesState[procKey] = false;
+                        }
+                    });
+
+                    // 4. 최종선별 완료 상태 수신
+                    const selectionVal = String(row['최종선별'] || row['선별수량'] || row['선별완료'] || row['Selected'] || '').trim().toUpperCase();
+                    const isCompleted = ['완료', 'O', 'Y', '1', 'TRUE'].includes(selectionVal) || (parseInt(row['선별수량'] || 0) >= parseInt(row['총수량'] || row['수량'] || 1) && parseInt(row['선별수량'] || 0) > 0);
+
+                    const totalQty = parseInt(row['총수량'] || row['수량'] || row['Qty'] || 1);
+                    const selectedQty = isCompleted ? totalQty : parseInt(row['선별수량'] || 0);
 
                     return {
                         id: `IMP_${Date.now()}_${idx}`,
@@ -1040,13 +1059,13 @@
                         itemNo: row['품번'] || row['Item No'] || row['Part Code'] || `ITEM-${idx + 1}`,
                         drawingNo: row['도면번호'] || row['도번'] || row['Part No'] || `PART-${idx + 1}`,
                         partName: row['품명'] || row['Part Name'] || '미지정',
-                        location: row['위치'] || row['Location'] || 'A-00',
-                        totalQty: parseInt(row['수량'] || row['총수량'] || row['Qty'] || 1),
-                        selectedQty: 0,
-                        isCompleted: false,
+                        location: row['위치(Location)'] || row['위치'] || row['Location'] || 'A-00',
+                        totalQty: totalQty,
+                        selectedQty: selectedQty,
+                        isCompleted: isCompleted,
                         requiredProcesses: requiredProcesses,
-                        processes: {},
-                        selector: '-'
+                        processes: processesState,
+                        selector: row['선별자'] || row['담당자'] || '-'
                     };
                 });
 
