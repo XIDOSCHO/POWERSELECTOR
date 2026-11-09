@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스마트 제조 & 파트리스트 선별 시스템</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS for Excel handling -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Firebase SDK (v9/v10 Compat Mode) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        .process-chip {
+            transition: all 0.2s ease;
+        }
+        .process-chip:active {
+            transform: scale(0.95);
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans select-none">
+
+    <!-- 상단 헤더 & 컨트롤 바 -->
+    <header class="bg-slate-800 border-b border-slate-700 px-4 py-3 sticky top-0 z-30 shadow-lg">
+        <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-3">
+            
+            <!-- 앱 타이틀 및 프로젝트 선택 -->
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-600 p-2.5 rounded-xl shadow-md shadow-blue-500/20">
+                    <i data-lucide="layers" class="w-6 h-6 text-white"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <select id="projectSelect" class="bg-slate-700 text-white font-bold text-lg rounded-lg px-3 py-1 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <!-- JS dynamic options -->
+                        </select>
+                        <button id="addProjectBtn" class="bg-slate-700 hover:bg-slate-600 p-1.5 rounded-lg border border-slate-600 transition" title="새 프로젝트 추가">
+                            <i data-lucide="plus" class="w-5 h-5 text-blue-400"></i>
+                        </button>
+                        <button id="deleteProjectBtn" class="bg-slate-700 hover:bg-rose-900/60 p-1.5 rounded-lg border border-slate-600 transition" title="현재 프로젝트 삭제">
+                            <i data-lucide="trash-2" class="w-5 h-5 text-rose-400"></i>
+                        </button>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-0.5">공정 진행 & 부재 선별 실시간 현황판</p>
+                </div>
+            </div>
+
+            <!-- 현황 요약 통계 -->
+            <div class="hidden md:flex items-center gap-4 bg-slate-900/60 px-4 py-2 rounded-xl border border-slate-700/60">
+                <div class="text-center">
+                    <span class="text-xs text-slate-400 block">전체 부품</span>
+                    <span id="statTotalParts" class="font-bold text-base text-slate-200">0</span>
+                </div>
+                <div class="h-6 w-px bg-slate-700"></div>
+                <div class="text-center">
+                    <span class="text-xs text-slate-400 block">선별 완료</span>
+                    <span id="statSelectedParts" class="font-bold text-base text-blue-400">0</span>
+                </div>
+                <div class="h-6 w-px bg-slate-700"></div>
+                <div class="text-center">
+                    <span class="text-xs text-emerald-400 font-medium block">부재 준비 완료</span>
+                    <span id="statReadyParts" class="font-bold text-base text-emerald-400">0</span>
+                </div>
+            </div>
+
+            <!-- 권한 모드 및 데이터 관리 -->
+            <div class="flex items-center gap-1.5 md:gap-2 flex-wrap">
+                <!-- 실시간 구동 상태 표시 태그 -->
+                <div id="syncBadge" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-medium">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="syncStatusText">로컬 연결됨</span>
+                </div>
+
+                <div id="roleBadge" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-semibold">
+                    <i data-lucide="eye" class="w-4 h-4"></i>
+                    <span>조회 전용 (Read Only)</span>
+                </div>
+                <button id="authToggleBtn" class="bg-blue-600 hover:bg-blue-500 text-white font-medium px-3 py-1.5 rounded-lg text-xs shadow-md transition flex items-center gap-1">
+                    <i data-lucide="lock" class="w-3.5 h-3.5"></i>
+                    <span>권한 변경</span>
+                </button>
+
+                <!-- 클라우드 연동(구름 아이콘) 버튼 항상 노출 -->
+                <button id="cloudConfigBtn" class="bg-blue-600/20 hover:bg-blue-600/30 p-2 rounded-lg border border-blue-500/50 text-blue-300 hover:text-blue-200 transition shadow-sm" title="Firebase 클라우드 연동 설정 (방법 A)">
+                    <i data-lucide="cloud" class="w-5 h-5"></i>
+                </button>
+                <div class="h-5 w-px bg-slate-700 mx-0.5"></div>
+                <button id="excelImportBtn" class="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg border border-slate-600 text-slate-200 transition" title="엑셀 불러오기">
+                    <i data-lucide="file-up" class="w-5 h-5"></i>
+                </button>
+                <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" class="hidden">
+                <button id="excelExportBtn" class="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg border border-slate-600 text-slate-200 transition" title="엑셀 내보내기">
+                    <i data-lucide="file-down" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 진행도 및 필터/검색 영역 -->
+    <section class="bg-slate-800/60 border-b border-slate-700/60 px-4 py-3">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row gap-3 items-center justify-between">
+            
+            <!-- 진행률 프로그레스 바 -->
+            <div class="w-full md:w-1/2">
+                <div class="flex justify-between items-center text-xs text-slate-300 mb-1 font-medium">
+                    <span>최종 부재 준비 달성률 (맞춤 공정 + 선별 완료)</span>
+                    <span id="progressPercent" class="text-emerald-400 font-bold">0%</span>
+                </div>
+                <div class="w-full bg-slate-700 h-3 rounded-full overflow-hidden p-0.5">
+                    <div id="progressBar" class="bg-gradient-to-r from-blue-500 to-emerald-400 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- 검색 및 상태 필터 -->
+            <div class="w-full md:w-auto flex items-center gap-2">
+                <div class="relative flex-1 md:w-64">
+                    <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" id="searchInput" placeholder="도번, 품명, 품번, 자재구분, Location..." class="w-full bg-slate-900 border border-slate-700 text-slate-100 pl-9 pr-3 py-1.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                
+                <select id="statusFilter" class="bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="ALL">전체 보기</option>
+                    <option value="READY">부재 준비 완료 (Ready)</option>
+                    <option value="SELECTED">선별 완료</option>
+                    <option value="PENDING">미완료 (진행중/대기)</option>
+                </select>
+
+                <div class="flex border border-slate-700 rounded-lg overflow-hidden bg-slate-900">
+                    <button id="viewCardBtn" class="p-1.5 bg-blue-600 text-white"><i data-lucide="grid" class="w-4 h-4"></i></button>
+                    <button id="viewListBtn" class="p-1.5 text-slate-400 hover:text-white"><i data-lucide="list" class="w-4 h-4"></i></button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 메인 파트리스트 컨텐츠 영역 -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4">
+        <div id="partsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Dynamic Part Cards / Rows -->
+        </div>
+
+        <div id="emptyState" class="hidden flex flex-col items-center justify-center py-20 text-slate-500">
+            <i data-lucide="inbox" class="w-16 h-16 mb-3 stroke-1"></i>
+            <p class="text-lg font-medium text-slate-400">표시할 부품 데이터가 없습니다.</p>
+            <p class="text-sm">엑셀 파일을 업로드하거나 검색 조건을 변경해 보세요.</p>
+        </div>
+    </main>
+
+    <!-- 권한 변경 PIN 모달 -->
+    <div id="authModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i data-lucide="shield-check" class="w-5 h-5 text-blue-400"></i>
+                    선별자 작업 권한 인증
+                </h3>
+                <button id="closeAuthModal" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <p class="text-sm text-slate-400 mb-4">입력 및 공정/선별 완료 처리를 위해 PIN 번호를 입력해 주세요. (기본 PIN: <strong class="text-blue-400">1234</strong>)</p>
+            
+            <input type="password" id="pinInput" maxlength="6" placeholder="PIN 번호 입력" class="w-full bg-slate-900 border border-slate-700 text-center text-2xl tracking-widest text-white py-3 rounded-xl mb-4 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            
+            <div class="flex gap-2">
+                <button id="switchToViewBtn" class="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium py-3 rounded-xl transition text-sm">조회 전용 전환</button>
+                <button id="submitPinBtn" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition text-sm shadow-lg shadow-blue-500/20">선별자 권한 승인</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 프로젝트 추가 모달 -->
+    <div id="projectModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <h3 class="text-lg font-bold text-white mb-4">신규 프로젝트 생성</h3>
+            <input type="text" id="newProjectName" placeholder="프로젝트명 (예: EC300_호기_01)" class="w-full bg-slate-900 border border-slate-700 text-white px-4 py-2.5 rounded-xl mb-4 focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm">
+            <div class="flex justify-end gap-2">
+                <button id="closeProjectModal" class="px-4 py-2 bg-slate-700 text-slate-300 rounded-lg text-sm">취소</button>
+                <button id="saveProjectBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg text-sm">프로젝트 생성</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 프로젝트 삭제 확인 모달 -->
+    <div id="deleteProjectModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <div class="flex items-center gap-3 mb-4 text-rose-400">
+                <i data-lucide="alert-circle" class="w-6 h-6"></i>
+                <h3 class="text-lg font-bold text-white">프로젝트 삭제</h3>
+            </div>
+            <p class="text-sm text-slate-300 mb-2">삭제할 프로젝트: <span id="deleteProjectNamePreview" class="font-mono font-bold text-rose-400"></span></p>
+            <p class="text-xs text-slate-400 mb-6">해당 프로젝트와 포함된 모든 부품 데이터가 삭제됩니다. 정말 삭제하시겠습니까?</p>
+            <div class="flex justify-end gap-2">
+                <button id="cancelDeleteProjectBtn" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl text-sm font-medium transition">취소</button>
+                <button id="confirmDeleteProjectBtn" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-sm font-bold transition shadow-md shadow-rose-600/20">프로젝트 삭제</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase 클라우드 연동 설정 모달 -->
+    <div id="cloudModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i data-lucide="cloud-lightning" class="w-5 h-5 text-blue-400"></i>
+                    Firebase 실시간 동기화 설정 (방법 A)
+                </h3>
+                <button id="closeCloudModal" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            
+            <p class="text-xs text-slate-300 mb-4 leading-relaxed">
+                Google Firebase 콘솔에서 발급받은 <strong class="text-blue-400">firebaseConfig JSON</strong> 객체를 아래에 붙여넣으시면, 다른 모든 태블릿 PC와 <strong>0.1초 실시간 동기화</strong>가 시작됩니다.
+            </p>
+
+            <div class="mb-4">
+                <label class="text-xs text-slate-400 block mb-1 font-mono">Firebase SDK Config (JSON 형식):</label>
+                <textarea id="firebaseConfigInput" rows="6" placeholder='{
+  "apiKey": "AIzaSy...",
+  "authDomain": "my-project.firebaseapp.com",
+  "projectId": "my-project",
+  "storageBucket": "my-project.appspot.com",
+  "messagingSenderId": "123456789",
+  "appId": "1:123456789:web:abcdef"
+}' class="w-full bg-slate-900 border border-slate-700 font-mono text-xs text-emerald-300 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+            </div>
+
+            <div class="flex justify-between items-center gap-2">
+                <button id="disconnectCloudBtn" class="bg-rose-900/40 hover:bg-rose-800 text-rose-300 border border-rose-700/50 px-3 py-2 rounded-xl text-xs font-semibold transition">
+                    클라우드 연결 해제 (로컬 모드)
+                </button>
+                <div class="flex gap-2">
+                    <button id="saveCloudConfigBtn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-md transition">
+                        연동 및 실시간 시작
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 엑셀 내보내기 덮어쓰기 확인 모달 -->
+    <div id="exportOverwriteModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <div class="flex items-center gap-3 mb-4 text-blue-400">
+                <i data-lucide="file-check" class="w-6 h-6"></i>
+                <h3 class="text-lg font-bold text-white">엑셀 파일 내보내기 및 경로 지정</h3>
+            </div>
+            
+            <div class="mb-4">
+                <label class="text-xs text-slate-400 block mb-1">저장/덮어쓰기 할 파일명 (경로 지정):</label>
+                <div class="flex gap-2">
+                    <input type="text" id="exportFileNameInput" class="flex-1 bg-slate-900 border border-slate-700 text-white font-mono text-sm px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button id="changeExportLocationBtn" class="bg-slate-700 hover:bg-slate-600 text-xs font-semibold text-blue-300 px-3 py-2 rounded-xl border border-slate-600 transition shrink-0 flex items-center gap-1">
+                        <i data-lucide="folder-open" class="w-3.5 h-3.5"></i>
+                        <span>경로 변경</span>
+                    </button>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-1.5">* '경로 변경'을 누르면 원하는 내보내기 폴더 위치를 선택할 수 있습니다.</p>
+            </div>
+
+            <div class="flex justify-end gap-2 mt-6">
+                <button id="cancelExportBtn" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl text-sm font-medium transition">취소</button>
+                <button id="confirmExportBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold transition shadow-md shadow-blue-500/20">이 경로에 덮어쓰기 저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 프로젝트 중복 로드 확인 모달 -->
+    <div id="duplicateProjectModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <div class="flex items-center gap-3 mb-4 text-amber-400">
+                <i data-lucide="copy" class="w-6 h-6"></i>
+                <h3 class="text-lg font-bold text-white">동일한 프로젝트 존재함</h3>
+            </div>
+            <p class="text-sm text-slate-300 mb-2">프로젝트명: <span id="dupProjectNamePreview" class="font-mono font-bold text-amber-400"></span></p>
+            <p class="text-xs text-slate-400 mb-4">이미 동일한 이름의 프로젝트가 존재합니다. 어떻게 처리하시겠습니까?</p>
+            
+            <div class="mb-4 hidden" id="renameProjectContainer">
+                <label class="text-xs text-slate-400 block mb-1">새 프로젝트 이름 입력:</label>
+                <input type="text" id="renameProjectInput" class="w-full bg-slate-900 border border-slate-700 text-white px-3 py-2 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+
+            <div class="flex flex-col gap-2">
+                <div class="flex gap-2">
+                    <button id="dupOverwriteBtn" class="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-bold py-2.5 rounded-xl transition text-xs shadow-md">기존 프로젝트 덮어쓰기</button>
+                    <button id="dupRenameOptionBtn" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition text-xs shadow-md">다른 이름으로 저장</button>
+                </div>
+                <button id="dupCancelBtn" class="w-full bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium py-2 rounded-xl transition text-xs">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 전체 공정 마스터 정의
+        const PROCESS_LIST = [
+            { key: 'cut', label: '절단' },
+            { key: 'b23', label: 'B2/3' },
+            { key: 'mct', label: 'MCT' },
+            { key: 'mty', label: 'MTY' },
+            { key: 'r', label: 'R' },
+            { key: 'bd', label: 'BD' },
+            { key: 'pu', label: 'PU' }
+        ];
+
+        // 자재구분별 컬러 뱃지 맵
+        const MATERIAL_COLORS = {
+            'PLATE': 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+            'PIPE': 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+            'BOSS': 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+            'FB': 'bg-rose-500/20 text-rose-300 border-rose-500/40',
+            'DEFAULT': 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+        };
+
+        // 초기 데모 데이터 (자재구분, 품번 포함)
+        const DEFAULT_DATA = {
+            "EXCAVATOR_PRJ_01": [
+                {
+                    id: "P001",
+                    itemNo: "ITEM-101",
+                    material: "PLATE",
+                    drawingNo: "EC300-FRAME-101",
+                    partName: "MAIN FRAME TOP PLATE",
+                    location: "A-01-02",
+                    totalQty: 2,
+                    selectedQty: 2,
+                    isCompleted: true,
+                    requiredProcesses: ['cut', 'mct', 'pu'],
+                    processes: { cut: true, mct: true, pu: true },
+                    selector: "박진혁"
+                },
+                {
+                    id: "P002",
+                    itemNo: "ITEM-204",
+                    material: "BOSS",
+                    drawingNo: "EC300-ARM-204",
+                    partName: "BOOM CONNECTOR BOSS",
+                    location: "B-03-01",
+                    totalQty: 4,
+                    selectedQty: 2,
+                    isCompleted: false,
+                    requiredProcesses: ['cut', 'bd'],
+                    processes: { cut: true, bd: false },
+                    selector: "김재민"
+                },
+                {
+                    id: "P003",
+                    itemNo: "ITEM-305",
+                    material: "FB",
+                    drawingNo: "EC300-BUCKET-305",
+                    partName: "SIDE CUTTER BRACKET",
+                    location: "C-02-04",
+                    totalQty: 10,
+                    selectedQty: 0,
+                    isCompleted: false,
+                    requiredProcesses: ['cut', 'b23', 'r'],
+                    processes: { cut: true, b23: false, r: false },
+                    selector: "-"
+                }
+            ],
+            "EXCAVATOR_PRJ_02": [
+                {
+                    id: "P101",
+                    itemNo: "ITEM-001",
+                    material: "PIPE",
+                    drawingNo: "EC210-CABIN-001",
+                    partName: "FLOOR PLATE MOUNT PIPE",
+                    location: "D-01-01",
+                    totalQty: 6,
+                    selectedQty: 6,
+                    isCompleted: true,
+                    requiredProcesses: ['cut', 'mct'],
+                    processes: { cut: true, mct: true },
+                    selector: "라잉표"
+                }
+            ]
+        };
+
+        // 앱 상태 관리
+        let appState = {
+            projects: JSON.parse(localStorage.getItem('smart_parts_projects')) || DEFAULT_DATA,
+            currentProject: localStorage.getItem('smart_parts_current_prj') || "EXCAVATOR_PRJ_01",
+            userRole: 'VIEWER',
+            viewMode: 'CARD',
+            searchQuery: '',
+            statusFilter: 'ALL'
+        };
+
+        // Firebase 연동 상태 변수
+        let db = null;
+        let unsubscribeSnapshot = null;
+        let isFirebaseConnected = false;
+
+        // 불러온 파일의 핸들 저장 (실제 덮어쓰기용)
+        let currentFileHandle = null;
+
+        // 엑셀 중복 처리 임시 데이터 대기소
+        let pendingImportData = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initProjectDropdown();
+            initFirebaseFromStorage();
+            renderApp();
+            setupEventListeners();
+            lucide.createIcons();
+        });
+
+        function saveData() {
+            localStorage.setItem('smart_parts_projects', JSON.stringify(appState.projects));
+            localStorage.setItem('smart_parts_current_prj', appState.currentProject);
+
+            // Firebase 클라우드 연결 상태라면 클라우드 DB에도 실시간 동기화 업데이트
+            if (isFirebaseConnected && db) {
+                db.collection('projects').doc(appState.currentProject).set({
+                    parts: appState.projects[appState.currentProject],
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                }).catch(err => console.error("Firebase Sync Error:", err));
+            }
+        }
+
+        // Firebase 설정 초기화 함수
+        function initFirebaseFromStorage() {
+            const savedConfigStr = localStorage.getItem('smart_parts_firebase_config');
+            if (savedConfigStr) {
+                try {
+                    const config = JSON.parse(savedConfigStr);
+                    if (!firebase.apps.length) {
+                        firebase.initializeApp(config);
+                    }
+                    db = firebase.firestore();
+                    isFirebaseConnected = true;
+                    updateSyncBadge(true, "클라우드 실시간 동기화 중");
+                    listenToProjectChanges();
+                } catch (e) {
+                    console.error("Firebase init failed:", e);
+                    updateSyncBadge(false, "로컬 모드");
+                }
+            } else {
+                updateSyncBadge(false, "로컬 모드");
+            }
+        }
+
+        // 실시간 클라우드 변동 감지 (onSnapshot)
+        function listenToProjectChanges() {
+            if (!isFirebaseConnected || !db) return;
+
+            // 기존 리스너 해제 후 재설정
+            if (unsubscribeSnapshot) unsubscribeSnapshot();
+
+            unsubscribeSnapshot = db.collection('projects').doc(appState.currentProject)
+                .onSnapshot(doc => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        if (data && data.parts) {
+                            appState.projects[appState.currentProject] = data.parts;
+                            localStorage.setItem('smart_parts_projects', JSON.stringify(appState.projects));
+                            renderApp();
+                        }
+                    }
+                }, err => {
+                    console.error("Snapshot error:", err);
+                });
+        }
+
+        function updateSyncBadge(connected, text) {
+            const badge = document.getElementById('syncBadge');
+            const statusText = document.getElementById('syncStatusText');
+            statusText.textContent = text;
+
+            if (connected) {
+                badge.className = "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-medium";
+            } else {
+                badge.className = "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-700/50 text-slate-400 border border-slate-600/50 text-xs font-medium";
+            }
+        }
+
+        function initProjectDropdown() {
+            const select = document.getElementById('projectSelect');
+            select.innerHTML = '';
+            Object.keys(appState.projects).forEach(prjKey => {
+                const opt = document.createElement('option');
+                opt.value = prjKey;
+                opt.textContent = prjKey;
+                if (prjKey === appState.currentProject) opt.selected = true;
+                select.appendChild(opt);
+            });
+        }
+
+        function checkPartReady(part) {
+            if (!part.isCompleted) return false;
+            const reqs = part.requiredProcesses || PROCESS_LIST.map(p => p.key);
+            return reqs.every(procKey => part.processes && part.processes[procKey]);
+        }
+
+        function renderApp() {
+            const parts = appState.projects[appState.currentProject] || [];
+            
+            let totalCount = parts.length;
+            let selectedCount = 0;
+            let readyCount = 0;
+
+            parts.forEach(p => {
+                if (p.isCompleted) selectedCount++;
+                if (checkPartReady(p)) readyCount++;
+            });
+
+            document.getElementById('statTotalParts').textContent = totalCount;
+            document.getElementById('statSelectedParts').textContent = selectedCount;
+            document.getElementById('statReadyParts').textContent = readyCount;
+
+            const readyRatio = totalCount > 0 ? Math.round((readyCount / totalCount) * 100) : 0;
+            document.getElementById('progressPercent').textContent = `${readyRatio}%`;
+            document.getElementById('progressBar').style.width = `${readyRatio}%`;
+
+            const roleBadge = document.getElementById('roleBadge');
+            if (appState.userRole === 'SELECTOR') {
+                roleBadge.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-semibold";
+                roleBadge.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4"></i><span>선별자 권한 (작업가능)</span>`;
+            } else {
+                roleBadge.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-semibold";
+                roleBadge.innerHTML = `<i data-lucide="eye" class="w-4 h-4"></i><span>조회 전용 (Read Only)</span>`;
+            }
+
+            const filteredParts = parts.filter(part => {
+                const query = appState.searchQuery.toLowerCase();
+                const matchesSearch = part.drawingNo.toLowerCase().includes(query) ||
+                                      part.partName.toLowerCase().includes(query) ||
+                                      (part.itemNo && part.itemNo.toLowerCase().includes(query)) ||
+                                      (part.material && part.material.toLowerCase().includes(query)) ||
+                                      part.location.toLowerCase().includes(query);
+                
+                const isReady = checkPartReady(part);
+
+                if (appState.statusFilter === 'READY') return matchesSearch && isReady;
+                if (appState.statusFilter === 'SELECTED') return matchesSearch && part.isCompleted;
+                if (appState.statusFilter === 'PENDING') return matchesSearch && !isReady;
+                return matchesSearch;
+            });
+
+            const container = document.getElementById('partsContainer');
+            const emptyState = document.getElementById('emptyState');
+
+            if (filteredParts.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+                
+                if (appState.viewMode === 'CARD') {
+                    container.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4";
+                    container.innerHTML = filteredParts.map(part => createPartCardHTML(part)).join('');
+                } else {
+                    container.className = "flex flex-col gap-2";
+                    container.innerHTML = filteredParts.map(part => createPartRowHTML(part)).join('');
+                }
+            }
+            lucide.createIcons();
+        }
+
+        function createPartCardHTML(part) {
+            const isReady = checkPartReady(part);
+            const isSelector = appState.userRole === 'SELECTOR';
+            const reqs = part.requiredProcesses || PROCESS_LIST.map(p => p.key);
+            const matClass = MATERIAL_COLORS[part.material] || MATERIAL_COLORS['DEFAULT'];
+
+            return `
+                <div class="bg-slate-800 border ${isReady ? 'border-emerald-500/50 shadow-lg shadow-emerald-500/10' : 'border-slate-700'} rounded-2xl p-4 flex flex-col justify-between transition hover:border-slate-500">
+                    <div>
+                        <!-- 상단: 자재구분, 상태, 위치 -->
+                        <div class="flex justify-between items-start mb-2 gap-2">
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <span class="text-xs font-bold px-2.5 py-0.5 rounded-lg border ${matClass}">
+                                    📦 ${part.material || '일반'}
+                                </span>
+                                <span class="text-xs font-semibold px-2 py-0.5 rounded ${isReady ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-700 text-slate-300'}">
+                                    ${isReady ? '부재 준비 완료' : '진행중'}
+                                </span>
+                            </div>
+                            <span class="text-xs font-mono bg-slate-900 border border-slate-700 text-blue-400 font-bold px-2.5 py-1 rounded-lg shrink-0">
+                                📍 ${part.location}
+                            </span>
+                        </div>
+
+                        <!-- 부품 주요 식별 정보: 도면번호, 품명, 품번 -->
+                        <div class="mt-2">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <h4 class="text-lg font-extrabold text-white tracking-tight">${part.drawingNo}</h4>
+                                <span class="text-lg font-bold font-mono text-amber-300 bg-slate-900 px-2 py-0.5 rounded-lg border border-amber-500/40 shadow-sm">
+                                    ${part.itemNo || '-'}
+                                </span>
+                            </div>
+                            <p class="text-xs font-medium text-slate-300 mt-1">${part.partName}</p>
+                        </div>
+
+                        <div class="my-3">
+                            <div class="flex justify-between items-center mb-1.5">
+                                <span class="text-[11px] font-medium text-slate-400">필요 공정 (${reqs.length}개):</span>
+                            </div>
+                            <div class="flex flex-wrap gap-1.5">
+                                ${PROCESS_LIST.map(proc => {
+                                    const isRequired = reqs.includes(proc.key);
+                                    if (!isRequired) return '';
+
+                                    const isDone = part.processes && part.processes[proc.key];
+                                    return `
+                                        <button 
+                                            onclick="toggleProcess('${part.id}', '${proc.key}')" 
+                                            ${!isSelector ? 'disabled' : ''} 
+                                            class="process-chip px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
+                                                isDone 
+                                                ? 'bg-blue-600/30 border border-blue-500/50 text-blue-300' 
+                                                : 'bg-slate-900 border border-slate-700 text-slate-400 hover:text-slate-200'
+                                            } ${!isSelector ? 'cursor-not-allowed opacity-80' : 'active:scale-95'}"
+                                        >
+                                            <span class="w-1.5 h-1.5 rounded-full ${isDone ? 'bg-blue-400' : 'bg-slate-600'}"></span>
+                                            ${proc.label}
+                                        </button>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pt-3 border-t border-slate-700/80 flex items-center justify-between mt-2">
+                        <div>
+                            <span class="text-xs text-slate-400 block">선별 수량</span>
+                            <span class="text-sm font-bold text-white">${part.selectedQty} / ${part.totalQty} EA</span>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] text-slate-400 bg-slate-900 px-2 py-1 rounded border border-slate-700/50">
+                                👤 ${part.selector || '-'}
+                            </span>
+
+                            <button 
+                                onclick="toggleSelection('${part.id}')"
+                                ${!isSelector ? 'disabled' : ''}
+                                class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                                    part.isCompleted 
+                                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20' 
+                                    : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                                } ${!isSelector ? 'cursor-not-allowed opacity-75' : ''}"
+                            >
+                                <i data-lucide="${part.isCompleted ? 'check-circle' : 'circle'}" class="w-4 h-4"></i>
+                                ${part.isCompleted ? '선별 완료' : '선별 대기'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createPartRowHTML(part) {
+            const isReady = checkPartReady(part);
+            const isSelector = appState.userRole === 'SELECTOR';
+            const reqs = part.requiredProcesses || PROCESS_LIST.map(p => p.key);
+            const matClass = MATERIAL_COLORS[part.material] || MATERIAL_COLORS['DEFAULT'];
+
+            return `
+                <div class="bg-slate-800 border ${isReady ? 'border-emerald-500/50' : 'border-slate-700'} rounded-xl p-3 flex flex-col md:flex-row items-center justify-between gap-3">
+                    <div class="flex items-center gap-3 w-full md:w-5/12">
+                        <span class="text-xs font-bold px-2 py-1 rounded ${isReady ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-300'}">
+                            ${isReady ? 'READY' : 'WAIT'}
+                        </span>
+                        <span class="text-[11px] font-bold px-2 py-0.5 rounded border ${matClass}">
+                            ${part.material || '일반'}
+                        </span>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-white text-base truncate">${part.drawingNo}</span>
+                                <span class="text-base font-bold font-mono text-amber-300 bg-slate-900 px-1.5 py-0.5 rounded border border-amber-500/40">${part.itemNo || '-'}</span>
+                            </div>
+                            <p class="text-xs text-slate-400 truncate">${part.partName} [${part.location}]</p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap gap-1">
+                        ${PROCESS_LIST.map(proc => {
+                            if (!reqs.includes(proc.key)) return '';
+                            const isDone = part.processes && part.processes[proc.key];
+                            return `
+                                <button onclick="toggleProcess('${part.id}', '${proc.key}')" ${!isSelector ? 'disabled' : ''} class="px-2 py-0.5 rounded text-[11px] font-semibold ${isDone ? 'bg-blue-600/40 text-blue-300 border border-blue-500/40' : 'bg-slate-900 text-slate-500 border border-slate-700'}">
+                                    ${proc.label}
+                                </button>
+                            `;
+                        }).join('')}
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs font-bold text-slate-300">${part.selectedQty}/${part.totalQty} EA</span>
+                        <button onclick="toggleSelection('${part.id}')" ${!isSelector ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg text-xs font-bold ${part.isCompleted ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-300'}">
+                            ${part.isCompleted ? '선별완료' : '선별대기'}
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function toggleProcess(partId, processKey) {
+            if (appState.userRole !== 'SELECTOR') return;
+            const parts = appState.projects[appState.currentProject];
+            const part = parts.find(p => p.id === partId);
+            if (part) {
+                if (!part.processes) part.processes = {};
+                part.processes[processKey] = !part.processes[processKey];
+                saveData();
+                renderApp();
+            }
+        }
+
+        function toggleSelection(partId) {
+            if (appState.userRole !== 'SELECTOR') return;
+            const parts = appState.projects[appState.currentProject];
+            const part = parts.find(p => p.id === partId);
+            if (part) {
+                part.isCompleted = !part.isCompleted;
+                part.selectedQty = part.isCompleted ? part.totalQty : 0;
+                saveData();
+                renderApp();
+            }
+        }
+
+        function setupEventListeners() {
+            document.getElementById('projectSelect').addEventListener('change', (e) => {
+                appState.currentProject = e.target.value;
+                saveData();
+                if (isFirebaseConnected) listenToProjectChanges();
+                renderApp();
+            });
+
+            // Firebase 클라우드 설정 모달 이벤트
+            document.getElementById('cloudConfigBtn').addEventListener('click', () => {
+                const saved = localStorage.getItem('smart_parts_firebase_config');
+                if (saved) document.getElementById('firebaseConfigInput').value = saved;
+                document.getElementById('cloudModal').classList.remove('hidden');
+            });
+
+            document.getElementById('closeCloudModal').addEventListener('click', () => {
+                document.getElementById('cloudModal').classList.add('hidden');
+            });
+
+            document.getElementById('saveCloudConfigBtn').addEventListener('click', () => {
+                const rawConfig = document.getElementById('firebaseConfigInput').value.trim();
+                try {
+                    let configObj = null;
+
+                    // 1. 엄격한 JSON 파싱 시도
+                    try {
+                        configObj = JSON.parse(rawConfig);
+                    } catch (e1) {
+                        // 2. JavaScript 객체 형태 파싱 (const firebaseConfig = {...} 또는 JS 객체 문자열)
+                        let cleaned = rawConfig;
+
+                        // const firebaseConfig = 제거
+                        cleaned = cleaned.replace(/const\s+firebaseConfig\s*=\s*/g, '');
+                        // var / let 제거
+                        cleaned = cleaned.replace(/(var|let)\s+\w+\s*=\s*/g, '');
+                        // 끝쪽 세미콜론 제거
+                        cleaned = cleaned.trim().replace(/;$/, '');
+
+                        // JS 객체 Key 파싱 (예: apiKey: "..." -> "apiKey": "...")
+                        cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z0-9_$]+)\s*:/g, '$1"$2":');
+                        // 홀따옴표를 쌍따옴표로 변환 (값 영역)
+                        cleaned = cleaned.replace(/:\s*'([^']*)'/g, ':"$1"');
+                        // Trailing comma (마지막 쉼표) 제거
+                        cleaned = cleaned.replace(/,\s*([}\]])/g, '$1');
+
+                        configObj = JSON.parse(cleaned);
+                    }
+
+                    if (configObj && configObj.apiKey && configObj.projectId) {
+                        localStorage.setItem('smart_parts_firebase_config', JSON.stringify(configObj));
+                        document.getElementById('cloudModal').classList.add('hidden');
+                        location.reload(); // Firebase SDK 재초기화를 위해 리로드
+                    } else {
+                        throw new Error('필수 항목이 누락되었습니다.');
+                    }
+                } catch (e) {
+                    alert('입력하신 Firebase 설정 형식을 읽을 수 없습니다.\nFirebase 화면에서 복사한 전체 내용을 그대로 붙여넣어 주세요.');
+                }
+            });
+
+            document.getElementById('disconnectCloudBtn').addEventListener('click', () => {
+                localStorage.removeItem('smart_parts_firebase_config');
+                document.getElementById('cloudModal').classList.add('hidden');
+                location.reload();
+            });
+
+            document.getElementById('addProjectBtn').addEventListener('click', () => {
+                document.getElementById('projectModal').classList.remove('hidden');
+            });
+            document.getElementById('closeProjectModal').addEventListener('click', () => {
+                document.getElementById('projectModal').classList.add('hidden');
+            });
+            document.getElementById('saveProjectBtn').addEventListener('click', () => {
+                const name = document.getElementById('newProjectName').value.trim();
+                if (name && !appState.projects[name]) {
+                    appState.projects[name] = [];
+                    appState.currentProject = name;
+                    saveData();
+                    initProjectDropdown();
+                    renderApp();
+                    document.getElementById('projectModal').classList.add('hidden');
+                    document.getElementById('newProjectName').value = '';
+                }
+            });
+
+            // 프로젝트 삭제 이벤트
+            document.getElementById('deleteProjectBtn').addEventListener('click', () => {
+                document.getElementById('deleteProjectNamePreview').textContent = appState.currentProject;
+                document.getElementById('deleteProjectModal').classList.remove('hidden');
+            });
+            document.getElementById('cancelDeleteProjectBtn').addEventListener('click', () => {
+                document.getElementById('deleteProjectModal').classList.add('hidden');
+            });
+            document.getElementById('confirmDeleteProjectBtn').addEventListener('click', () => {
+                const projectToDelete = appState.currentProject;
+                delete appState.projects[projectToDelete];
+
+                const remainingProjects = Object.keys(appState.projects);
+                if (remainingProjects.length > 0) {
+                    appState.currentProject = remainingProjects[0];
+                } else {
+                    const defaultName = "NEW_PROJECT_01";
+                    appState.projects[defaultName] = [];
+                    appState.currentProject = defaultName;
+                }
+
+                saveData();
+                initProjectDropdown();
+                renderApp();
+                document.getElementById('deleteProjectModal').classList.add('hidden');
+            });
+
+            document.getElementById('searchInput').addEventListener('input', (e) => {
+                appState.searchQuery = e.target.value;
+                renderApp();
+            });
+            document.getElementById('statusFilter').addEventListener('change', (e) => {
+                appState.statusFilter = e.target.value;
+                renderApp();
+            });
+
+            document.getElementById('viewCardBtn').addEventListener('click', () => {
+                appState.viewMode = 'CARD';
+                document.getElementById('viewCardBtn').className = "p-1.5 bg-blue-600 text-white";
+                document.getElementById('viewListBtn').className = "p-1.5 text-slate-400 hover:text-white";
+                renderApp();
+            });
+            document.getElementById('viewListBtn').addEventListener('click', () => {
+                appState.viewMode = 'LIST';
+                document.getElementById('viewListBtn').className = "p-1.5 bg-blue-600 text-white";
+                document.getElementById('viewCardBtn').className = "p-1.5 text-slate-400 hover:text-white";
+                renderApp();
+            });
+
+            document.getElementById('authToggleBtn').addEventListener('click', () => {
+                document.getElementById('authModal').classList.remove('hidden');
+            });
+            document.getElementById('closeAuthModal').addEventListener('click', () => {
+                document.getElementById('authModal').classList.add('hidden');
+            });
+            document.getElementById('switchToViewBtn').addEventListener('click', () => {
+                appState.userRole = 'VIEWER';
+                document.getElementById('authModal').classList.add('hidden');
+                renderApp();
+            });
+            document.getElementById('submitPinBtn').addEventListener('click', () => {
+                const pin = document.getElementById('pinInput').value;
+                if (pin === '1234') {
+                    appState.userRole = 'SELECTOR';
+                    document.getElementById('authModal').classList.add('hidden');
+                    document.getElementById('pinInput').value = '';
+                    renderApp();
+                } else {
+                    alert('PIN 번호가 올바르지 않습니다. (기본 PIN: 1234)');
+                }
+            });
+
+            document.getElementById('excelExportBtn').addEventListener('click', exportToExcel);
+            document.getElementById('excelImportBtn').addEventListener('click', handleImportClick);
+            document.getElementById('excelFileInput').addEventListener('change', importFromExcelFallback);
+
+            // 엑셀 내보내기 모달 및 경로 변경 이벤트
+            document.getElementById('cancelExportBtn').addEventListener('click', () => {
+                document.getElementById('exportOverwriteModal').classList.add('hidden');
+            });
+            document.getElementById('confirmExportBtn').addEventListener('click', () => {
+                document.getElementById('exportOverwriteModal').classList.add('hidden');
+                executeExport();
+            });
+            document.getElementById('changeExportLocationBtn').addEventListener('click', selectNewExportPath);
+
+            // 프로젝트 중복 처리 모달 이벤트
+            document.getElementById('dupCancelBtn').addEventListener('click', () => {
+                document.getElementById('duplicateProjectModal').classList.add('hidden');
+                document.getElementById('renameProjectContainer').classList.add('hidden');
+                pendingImportData = null;
+            });
+
+            document.getElementById('dupOverwriteBtn').addEventListener('click', () => {
+                if (!pendingImportData) return;
+                const { projectName, parts } = pendingImportData;
+                saveImportedProject(projectName, parts);
+                document.getElementById('duplicateProjectModal').classList.add('hidden');
+                document.getElementById('renameProjectContainer').classList.add('hidden');
+            });
+
+            document.getElementById('dupRenameOptionBtn').addEventListener('click', () => {
+                const container = document.getElementById('renameProjectContainer');
+                if (container.classList.contains('hidden')) {
+                    container.classList.remove('hidden');
+                    const input = document.getElementById('renameProjectInput');
+                    input.value = `${pendingImportData.projectName}_NEW`;
+                    input.focus();
+                } else {
+                    const newName = document.getElementById('renameProjectInput').value.trim();
+                    if (!newName) {
+                        alert('새 프로젝트 이름을 입력해 주세요.');
+                        return;
+                    }
+                    if (appState.projects[newName]) {
+                        alert('입력하신 새 프로젝트 이름도 이미 존재합니다.');
+                        return;
+                    }
+                    saveImportedProject(newName, pendingImportData.parts);
+                    document.getElementById('duplicateProjectModal').classList.add('hidden');
+                    container.classList.add('hidden');
+                }
+            });
+        }
+
+        // 스마트 엑셀 불러오기 (File System Access API 지원 시 파일 핸들 저장)
+        async function handleImportClick() {
+            if ('showOpenFilePicker' in window) {
+                try {
+                    const [fileHandle] = await window.showOpenFilePicker({
+                        types: [{
+                            description: 'Excel Files',
+                            accept: {
+                                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+                                'application/vnd.ms-excel': ['.xls'],
+                                'text/csv': ['.csv']
+                            }
+                        }],
+                        multiple: false
+                    });
+                    currentFileHandle = fileHandle;
+                    const file = await fileHandle.getFile();
+                    parseAndLoadExcel(file);
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        console.error('파일 선택 오류:', err);
+                        document.getElementById('excelFileInput').click();
+                    }
+                }
+            } else {
+                // 구형 브라우저 fallback
+                document.getElementById('excelFileInput').click();
+            }
+        }
+
+        function importFromExcelFallback(e) {
+            const file = e.target.files[0];
+            if (file) {
+                currentFileHandle = null; // 일반 브라우저 업로드는 핸들 없음
+                parseAndLoadExcel(file);
+            }
+        }
+
+        function parseAndLoadExcel(file) {
+            // 파일명에서 확장자(.xlsx, .xls, .csv 등)를 제거하여 프로젝트명으로 생성
+            const rawProjectName = file.name.replace(/\.[^/.]+$/, "").trim();
+            const projectName = rawProjectName || "NEW_PROJECT";
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const data = new Uint8Array(event.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet);
+
+                const importedParts = json.map((row, idx) => {
+                    let requiredProcesses = [];
+
+                    const rawProcStr = row['적용공정'] || row['공정'] || row['Processes'];
+                    if (rawProcStr && typeof rawProcStr === 'string') {
+                        PROCESS_LIST.forEach(proc => {
+                            if (rawProcStr.toLowerCase().includes(proc.label.toLowerCase()) || rawProcStr.toLowerCase().includes(proc.key)) {
+                                requiredProcesses.push(proc.key);
+                            }
+                        });
+                    } else {
+                        PROCESS_LIST.forEach(proc => {
+                            const val = row[proc.label] || row[proc.key];
+                            if (val && (val === 'O' || val === 'Y' || val === 1 || val === 'o' || val === 'y' || val === '완료' || val === '대기')) {
+                                requiredProcesses.push(proc.key);
+                            }
+                        });
+                    }
+
+                    if (requiredProcesses.length === 0) {
+                        requiredProcesses = PROCESS_LIST.map(p => p.key);
+                    }
+
+                    return {
+                        id: `IMP_${Date.now()}_${idx}`,
+                        material: row['자재구분'] || row['자재'] || row['재질'] || row['Material'] || 'PLATE',
+                        itemNo: row['품번'] || row['Item No'] || row['Part Code'] || `ITEM-${idx + 1}`,
+                        drawingNo: row['도면번호'] || row['도번'] || row['Part No'] || `PART-${idx + 1}`,
+                        partName: row['품명'] || row['Part Name'] || '미지정',
+                        location: row['위치'] || row['Location'] || 'A-00',
+                        totalQty: parseInt(row['수량'] || row['총수량'] || row['Qty'] || 1),
+                        selectedQty: 0,
+                        isCompleted: false,
+                        requiredProcesses: requiredProcesses,
+                        processes: {},
+                        selector: '-'
+                    };
+                });
+
+                if (importedParts.length > 0) {
+                    // 프로젝트명 중복 체크
+                    if (appState.projects[projectName]) {
+                        pendingImportData = { projectName, parts: importedParts };
+                        document.getElementById('dupProjectNamePreview').textContent = projectName;
+                        document.getElementById('duplicateProjectModal').classList.remove('hidden');
+                    } else {
+                        saveImportedProject(projectName, importedParts);
+                    }
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // 신규 프로젝트 생성 및 갱신 저장
+        function saveImportedProject(projName, partsData) {
+            appState.projects[projName] = partsData;
+            appState.currentProject = projName;
+            saveData();
+            initProjectDropdown();
+            renderApp();
+            pendingImportData = null;
+            alert(`프로젝트 [${projName}] (${partsData.length}개 부품) 생성 및 로드가 완료되었습니다.`);
+        }
+
+        function exportToExcel() {
+            const defaultName = currentFileHandle ? currentFileHandle.name : `${appState.currentProject}.xlsx`;
+            document.getElementById('exportFileNameInput').value = defaultName;
+            document.getElementById('exportOverwriteModal').classList.remove('hidden');
+        }
+
+        // 새 내보내기 경로/폴더 선택 및 파일 핸들 할당
+        async function selectNewExportPath() {
+            if ('showSaveFilePicker' in window) {
+                try {
+                    const currentName = document.getElementById('exportFileNameInput').value.trim() || `${appState.currentProject}.xlsx`;
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: currentName,
+                        types: [{
+                            description: 'Excel Files',
+                            accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] }
+                        }]
+                    });
+                    currentFileHandle = handle;
+                    document.getElementById('exportFileNameInput').value = handle.name;
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        console.error('경로 선택 중 오류:', err);
+                    }
+                }
+            } else {
+                alert('사용 중인 브라우저 환경에서는 기본 다운로드 경로로 내보내기가 진행됩니다.');
+            }
+        }
+
+        // 실제 파일 경로 지정 및 기존 파일 덮어쓰기 실행 함수
+        async function executeExport() {
+            const customFileName = document.getElementById('exportFileNameInput').value.trim() || `${appState.currentProject}.xlsx`;
+            const parts = appState.projects[appState.currentProject] || [];
+            
+            const exportData = parts.map(p => {
+                const reqs = p.requiredProcesses || PROCESS_LIST.map(pr => pr.key);
+                const reqLabels = reqs.map(k => {
+                    const found = PROCESS_LIST.find(pr => pr.key === k);
+                    return found ? found.label : k;
+                }).join(', ');
+
+                const rowObj = {
+                    '자재구분': p.material || 'PLATE',
+                    '품번': p.itemNo || '-',
+                    '도면번호': p.drawingNo,
+                    '품명': p.partName,
+                    '위치(Location)': p.location,
+                    '총수량': p.totalQty,
+                    '선별수량': p.selectedQty,
+                    '적용공정': reqLabels
+                };
+
+                // 각 공정별 완료 여부 열 추가
+                PROCESS_LIST.forEach(proc => {
+                    if (reqs.includes(proc.key)) {
+                        rowObj[proc.label] = p.processes && p.processes[proc.key] ? '완료' : '대기';
+                    } else {
+                        rowObj[proc.label] = 'N/A';
+                    }
+                });
+
+                rowObj['최종선별'] = p.isCompleted ? '완료' : '대기';
+                rowObj['부재준비완료'] = checkPartReady(p) ? 'READY' : '진행중';
+
+                return rowObj;
+            });
+
+            const worksheet = XLSX.utils.json_to_sheet(exportData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, appState.currentProject);
+
+            const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+
+            // File System Access API 지원 환경 (Chrome, Edge, 최신 태블릿 등)
+            if ('showSaveFilePicker' in window) {
+                try {
+                    let fileHandle = currentFileHandle;
+                    
+                    // 파일 핸들이 없거나 사용자가 새 이름/경로 저장을 유도한 경우 저장창 호출
+                    if (!fileHandle || fileHandle.name !== customFileName) {
+                        fileHandle = await window.showSaveFilePicker({
+                            suggestedName: customFileName,
+                            types: [{
+                                description: 'Excel Files',
+                                accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] }
+                            }]
+                        });
+                        currentFileHandle = fileHandle;
+                    }
+
+                    // 선택한 폴더 내 기존 동일 파일이 있을 경우 direct file overwrite 실행
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(excelBuffer);
+                    await writable.close();
+
+                    alert(`선택하신 경로의 파일 [${fileHandle.name}] 에 덮어쓰기 저장이 완료되었습니다.`);
+                    return;
+                } catch (err) {
+                    if (err.name === 'AbortError') return; // 사용자가 취소한 경우
+                    console.warn('직접 덮어쓰기 저장 중 오류 발생:', err);
+                }
+            }
+
+            // Fallback: 파일 탐색기 기반 덮어쓰기를 지원하지 않는 브라우저
+            XLSX.writeFile(workbook, customFileName);
+        }
+    </script>
+</body>
+</html>
