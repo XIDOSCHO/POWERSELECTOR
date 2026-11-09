@@ -457,18 +457,34 @@
             // 기존 리스너 해제 후 재설정
             if (unsubscribeSnapshot) unsubscribeSnapshot();
 
-            unsubscribeSnapshot = db.collection('projects').doc(appState.currentProject)
-                .onSnapshot(doc => {
-                    if (doc.exists) {
+            // 단일 문서가 아닌 'projects' 전체 컬렉션을 실시간 감지하여 모든 프로젝트 목록 및 수량을 완전 동기화
+            unsubscribeSnapshot = db.collection('projects')
+                .onSnapshot(snapshot => {
+                    let hasCloudData = false;
+                    const cloudProjects = {};
+
+                    snapshot.forEach(doc => {
                         const data = doc.data();
                         if (data && Array.isArray(data.parts)) {
-                            // 원격 파이어베이스 데이터로 로컬 덮어쓰기 후 즉시 UI 업데이트
-                            appState.projects[appState.currentProject] = data.parts;
-                            localStorage.setItem('smart_parts_projects', JSON.stringify(appState.projects));
-                            renderApp();
+                            cloudProjects[doc.id] = data.parts;
+                            hasCloudData = true;
                         }
+                    });
+
+                    if (hasCloudData) {
+                        appState.projects = cloudProjects;
+                        // 현재 선택된 프로젝트가 클라우드 목록에 없다면 첫 번째 프로젝트 선택
+                        if (!appState.projects[appState.currentProject]) {
+                            const keys = Object.keys(appState.projects);
+                            if (keys.length > 0) appState.currentProject = keys[0];
+                        }
+                        localStorage.setItem('smart_parts_projects', JSON.stringify(appState.projects));
+                        localStorage.setItem('smart_parts_current_prj', appState.currentProject);
+                        
+                        initProjectDropdown();
+                        renderApp();
                     } else {
-                        // 문서가 아직 클라우드에 존재하지 않을 경우 현재 데이터 전송 생성
+                        // 서버가 비어있다면 현재 데이터를 덮어쓰기 저장
                         saveData();
                     }
                 }, err => {
