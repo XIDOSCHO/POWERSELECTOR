@@ -93,6 +93,12 @@
                     <span>권한 변경</span>
                 </button>
 
+                <!-- 도면 폴더 선택 버튼 추가 -->
+                <button id="selectDrawingFolderBtn" class="bg-amber-600/20 hover:bg-amber-600/30 p-2 rounded-lg border border-amber-500/50 text-amber-300 hover:text-amber-200 transition shadow-sm flex items-center gap-1" title="PDF 도면 저장 폴더 지정">
+                    <i data-lucide="folder-open" class="w-5 h-5"></i>
+                    <span class="text-xs font-bold hidden lg:inline" id="drawingFolderStatusText">도면폴더 설정</span>
+                </button>
+
                 <!-- 클라우드 연동(구름 아이콘) 버튼 항상 노출 -->
                 <button id="cloudConfigBtn" class="bg-blue-600/20 hover:bg-blue-600/30 p-2 rounded-lg border border-blue-500/50 text-blue-300 hover:text-blue-200 transition shadow-sm" title="Firebase 클라우드 연동 설정 (방법 A)">
                     <i data-lucide="cloud" class="w-5 h-5"></i>
@@ -279,23 +285,48 @@
     <div id="duplicateProjectModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center hidden">
         <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <div class="flex items-center gap-3 mb-4 text-amber-400">
-                <i data-lucide="copy" class="w-6 h-6"></i>
-                <h3 class="text-lg font-bold text-white">동일한 프로젝트 존재함</h3>
+                <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+                <h3 class="text-lg font-bold text-white">동일한 이름의 프로젝트 존재</h3>
             </div>
-            <p class="text-sm text-slate-300 mb-2">프로젝트명: <span id="dupProjectNamePreview" class="font-mono font-bold text-amber-400"></span></p>
-            <p class="text-xs text-slate-400 mb-4">이미 동일한 이름의 프로젝트가 존재합니다. 어떻게 처리하시겠습니까?</p>
-            
-            <div class="mb-4 hidden" id="renameProjectContainer">
-                <label class="text-xs text-slate-400 block mb-1">새 프로젝트 이름 입력:</label>
-                <input type="text" id="renameProjectInput" class="w-full bg-slate-900 border border-slate-700 text-white px-3 py-2 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <p class="text-sm text-slate-300 mb-2">가져올 파일 프로젝트: <span id="dupProjectNamePreview" class="font-mono font-bold text-amber-400"></span></p>
+            <p class="text-xs text-slate-400 mb-6">동일한 프로젝트가 이미 존재합니다. 덮어쓰시겠습니까, 아니면 새 이름으로 저장하시겠습니까?</p>
+
+            <div id="renameProjectContainer" class="hidden mb-4">
+                <input type="text" id="renameProjectInput" placeholder="새 프로젝트명 입력" class="w-full bg-slate-900 border border-slate-700 text-white px-3 py-2 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
 
             <div class="flex flex-col gap-2">
-                <div class="flex gap-2">
-                    <button id="dupOverwriteBtn" class="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-bold py-2.5 rounded-xl transition text-xs shadow-md">기존 프로젝트 덮어쓰기</button>
-                    <button id="dupRenameOptionBtn" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl transition text-xs shadow-md">다른 이름으로 저장</button>
-                </div>
-                <button id="dupCancelBtn" class="w-full bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium py-2 rounded-xl transition text-xs">취소</button>
+                <button id="dupOverwriteBtn" class="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs transition shadow-md">
+                    기존 프로젝트 덮어쓰기
+                </button>
+                <button id="dupRenameOptionBtn" class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition shadow-md">
+                    새 프로젝트 이름으로 추가
+                </button>
+                <button id="dupCancelBtn" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium rounded-xl text-xs transition">
+                    가져오기 취소
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 도면 없음 / 도면 설정 안내 모달 -->
+    <div id="drawingNoticeModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl text-center">
+            <div class="w-12 h-12 bg-amber-500/20 border border-amber-500/40 text-amber-400 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <i data-lucide="file-warning" class="w-6 h-6"></i>
+            </div>
+            <h3 class="text-lg font-bold text-white mb-2" id="drawingNoticeTitle">도면 없음</h3>
+            <p class="text-xs text-slate-300 mb-5 leading-relaxed" id="drawingNoticeMessage">
+                선택한 품번의 단품코드 PDF 도면 파일이 존재하지 않습니다.
+            </p>
+            <div class="flex gap-2 justify-center">
+                <button id="changeDrawingFolderInNoticeBtn" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-xs font-semibold transition flex items-center gap-1">
+                    <i data-lucide="folder" class="w-4 h-4"></i>
+                    <span>폴더 재지정</span>
+                </button>
+                <button id="closeDrawingNoticeBtn" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition shadow-md">
+                    확인
+                </button>
             </div>
         </div>
     </div>
@@ -321,12 +352,13 @@
             'DEFAULT': 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
         };
 
-        // 초기 데모 데이터 (자재구분, 품번 포함)
+        // 초기 데모 데이터 (자재구분, 품번, 단품코드 포함)
         const DEFAULT_DATA = {
             "EXCAVATOR_PRJ_01": [
                 {
                     id: "P001",
                     itemNo: "ITEM-101",
+                    singleItemCode: "CODE-101-PDF",
                     material: "PLATE",
                     drawingNo: "EC300-FRAME-101",
                     partName: "MAIN FRAME TOP PLATE",
@@ -341,6 +373,7 @@
                 {
                     id: "P002",
                     itemNo: "ITEM-204",
+                    singleItemCode: "CODE-204-PDF",
                     material: "BOSS",
                     drawingNo: "EC300-ARM-204",
                     partName: "BOOM CONNECTOR BOSS",
@@ -351,36 +384,6 @@
                     requiredProcesses: ['cut', 'bd'],
                     processes: { cut: true, bd: false },
                     selector: "김재민"
-                },
-                {
-                    id: "P003",
-                    itemNo: "ITEM-305",
-                    material: "FB",
-                    drawingNo: "EC300-BUCKET-305",
-                    partName: "SIDE CUTTER BRACKET",
-                    location: "C-02-04",
-                    totalQty: 10,
-                    selectedQty: 0,
-                    isCompleted: false,
-                    requiredProcesses: ['cut', 'b23', 'r'],
-                    processes: { cut: true, b23: false, r: false },
-                    selector: "-"
-                }
-            ],
-            "EXCAVATOR_PRJ_02": [
-                {
-                    id: "P101",
-                    itemNo: "ITEM-001",
-                    material: "PIPE",
-                    drawingNo: "EC210-CABIN-001",
-                    partName: "FLOOR PLATE MOUNT PIPE",
-                    location: "D-01-01",
-                    totalQty: 6,
-                    selectedQty: 6,
-                    isCompleted: true,
-                    requiredProcesses: ['cut', 'mct'],
-                    processes: { cut: true, mct: true },
-                    selector: "라잉표"
                 }
             ]
         };
@@ -400,6 +403,9 @@
         let unsubscribeSnapshot = null;
         let isFirebaseConnected = false;
 
+        // 도면 저장 폴더 DirectoryHandle 저장용
+        let drawingDirectoryHandle = null;
+
         // 불러온 파일의 핸들 저장 (실제 덮어쓰기용)
         let currentFileHandle = null;
 
@@ -409,6 +415,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             initProjectDropdown();
             initFirebaseFromStorage();
+            initDrawingFolderHandle();
             renderApp();
             setupEventListeners();
             lucide.createIcons();
@@ -460,133 +467,212 @@
             // 단일 문서가 아닌 'projects' 전체 컬렉션을 실시간 감지하여 모든 프로젝트 목록 및 수량을 완전 동기화
             unsubscribeSnapshot = db.collection('projects')
                 .onSnapshot(snapshot => {
-                    let hasCloudData = false;
-                    const cloudProjects = {};
+                    if (snapshot.empty) return;
 
+                    let isUpdated = false;
                     snapshot.forEach(doc => {
-                        const data = doc.data();
-                        if (data && Array.isArray(data.parts)) {
-                            cloudProjects[doc.id] = data.parts;
-                            hasCloudData = true;
+                        const projName = doc.id;
+                        const docData = doc.data();
+                        if (docData && Array.isArray(docData.parts)) {
+                            appState.projects[projName] = docData.parts;
+                            isUpdated = true;
                         }
                     });
 
-                    if (hasCloudData) {
-                        appState.projects = cloudProjects;
-                        // 현재 선택된 프로젝트가 클라우드 목록에 없다면 첫 번째 프로젝트 선택
-                        if (!appState.projects[appState.currentProject]) {
-                            const keys = Object.keys(appState.projects);
-                            if (keys.length > 0) appState.currentProject = keys[0];
-                        }
+                    if (isUpdated) {
                         localStorage.setItem('smart_parts_projects', JSON.stringify(appState.projects));
-                        localStorage.setItem('smart_parts_current_prj', appState.currentProject);
-                        
                         initProjectDropdown();
                         renderApp();
-                    } else {
-                        // 서버가 비어있다면 현재 데이터를 덮어쓰기 저장
-                        saveData();
                     }
-                }, err => {
-                    console.error("Snapshot error:", err);
-                });
+                }, err => console.error("Firebase Snapshot error:", err));
         }
 
-        function updateSyncBadge(connected, text) {
-            const badge = document.getElementById('syncBadge');
-            const statusText = document.getElementById('syncStatusText');
-            statusText.textContent = text;
-
-            if (connected) {
-                badge.className = "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-medium";
-            } else {
-                badge.className = "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-700/50 text-slate-400 border border-slate-600/50 text-xs font-medium";
-            }
-        }
-
-        function initProjectDropdown() {
-            const select = document.getElementById('projectSelect');
-            select.innerHTML = '';
-            Object.keys(appState.projects).forEach(prjKey => {
-                const opt = document.createElement('option');
-                opt.value = prjKey;
-                opt.textContent = prjKey;
-                if (prjKey === appState.currentProject) opt.selected = true;
-                select.appendChild(opt);
+        // IndexedDB를 통해 도면 폴더 디렉토리 핸들 보존 및 복원
+        async function getIndexedDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('SmartPartsStorageDB', 1);
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('handles')) {
+                        db.createObjectStore('handles');
+                    }
+                };
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
             });
         }
 
-        function checkPartReady(part) {
-            if (!part.isCompleted) return false;
-            const reqs = part.requiredProcesses || [];
-            // 공정이 없는(빈칸) 부품은 최종 선별 완료만 되면 바로 READY 처리
-            if (reqs.length === 0) return true;
-            return reqs.every(procKey => part.processes && part.processes[procKey]);
+        async function saveDrawingFolderHandle(handle) {
+            try {
+                const db = await getIndexedDB();
+                const tx = db.transaction('handles', 'readwrite');
+                tx.objectStore('handles').put(handle, 'drawingFolderHandle');
+                drawingDirectoryHandle = handle;
+                updateDrawingFolderUI(handle.name);
+            } catch (err) {
+                console.error('Directory handle save failed:', err);
+            }
         }
 
-        function renderApp() {
+        async function initDrawingFolderHandle() {
+            try {
+                const db = await getIndexedDB();
+                const tx = db.transaction('handles', 'readonly');
+                const req = tx.objectStore('handles').get('drawingFolderHandle');
+                req.onsuccess = async () => {
+                    if (req.result) {
+                        drawingDirectoryHandle = req.result;
+                        updateDrawingFolderUI(drawingDirectoryHandle.name);
+                    }
+                };
+            } catch (err) {
+                console.warn('Directory handle load skipped');
+            }
+        }
+
+        function updateDrawingFolderUI(folderName) {
+            const btnText = document.getElementById('drawingFolderStatusText');
+            if (btnText) {
+                btnText.textContent = folderName ? `📁 ${folderName}` : '도면폴더 설정';
+            }
+        }
+
+        // 사용자 폴더 선택 창 호출
+        async function selectDrawingFolder() {
+            if ('showDirectoryPicker' in window) {
+                try {
+                    const handle = await window.showDirectoryPicker();
+                    await saveDrawingFolderHandle(handle);
+                    alert(`[${handle.name}] 폴더가 도면 저장소로 설정되었습니다.`);
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        console.error('Directory picker error:', err);
+                    }
+                }
+            } else {
+                alert('사용 중인 브라우저는 폴더 자동 지정을 지원하지 않습니다. 최신 Chrome 또는 Edge 브라우저를 권장합니다.');
+            }
+        }
+
+        // 품번 클릭 시 단품코드 기반 도면 열기
+        async function openPartDrawing(partId) {
             const parts = appState.projects[appState.currentProject] || [];
-            
-            let totalCount = parts.length;
-            let selectedCount = 0;
-            let readyCount = 0;
+            const part = parts.find(p => p.id === partId);
+            if (!part) return;
 
-            parts.forEach(p => {
-                if (p.isCompleted) selectedCount++;
-                if (checkPartReady(p)) readyCount++;
-            });
-
-            document.getElementById('statTotalParts').textContent = totalCount;
-            document.getElementById('statSelectedParts').textContent = selectedCount;
-            document.getElementById('statReadyParts').textContent = readyCount;
-
-            const readyRatio = totalCount > 0 ? Math.round((readyCount / totalCount) * 100) : 0;
-            document.getElementById('progressPercent').textContent = `${readyRatio}%`;
-            document.getElementById('progressBar').style.width = `${readyRatio}%`;
-
-            const roleBadge = document.getElementById('roleBadge');
-            if (appState.userRole === 'SELECTOR') {
-                roleBadge.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-semibold";
-                roleBadge.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4"></i><span>선별자 권한 (작업가능)</span>`;
-            } else {
-                roleBadge.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-semibold";
-                roleBadge.innerHTML = `<i data-lucide="eye" class="w-4 h-4"></i><span>조회 전용 (Read Only)</span>`;
+            const code = (part.singleItemCode || '').trim();
+            if (!code || code === '-' || code === 'undefined' || code === 'null') {
+                showDrawingNotice('단품코드정보누락', '해당 부품에 등록된 단품코드 정보가 없습니다.<br><span class="text-xs text-slate-400 mt-1 block">엑셀 파일의 [단품코드] 열에 정보가 기재되어 있는지 확인해 주세요.</span>');
+                return;
             }
 
-            const filteredParts = parts.filter(part => {
-                const query = appState.searchQuery.toLowerCase();
-                const matchesSearch = part.drawingNo.toLowerCase().includes(query) ||
-                                      part.partName.toLowerCase().includes(query) ||
-                                      (part.itemNo && part.itemNo.toLowerCase().includes(query)) ||
-                                      (part.material && part.material.toLowerCase().includes(query)) ||
-                                      part.location.toLowerCase().includes(query);
-                
-                const isReady = checkPartReady(part);
+            const expectedFileName = `${code}.pdf`;
 
-                if (appState.statusFilter === 'READY') return matchesSearch && isReady;
-                if (appState.statusFilter === 'SELECTED') return matchesSearch && part.isCompleted;
-                if (appState.statusFilter === 'PENDING') return matchesSearch && !isReady;
-                return matchesSearch;
-            });
+            // DirectoryHandle 기반 파일 탐색
+            if (drawingDirectoryHandle && 'getFileHandle' in drawingDirectoryHandle) {
+                try {
+                    // 사용자 접근 권한 확인
+                    if ((await drawingDirectoryHandle.queryPermission()) !== 'granted') {
+                        const perm = await drawingDirectoryHandle.requestPermission();
+                        if (perm !== 'granted') return;
+                    }
 
-            const container = document.getElementById('partsContainer');
-            const emptyState = document.getElementById('emptyState');
+                    // 단품코드 세그먼트 단위 정규화 함수 (두 번째 하이픈 이후 01-1 => 1-1, 02 => 2 규칙 적용)
+                    const normalizeSegment = (seg) => {
+                        return seg.split('-').map(part => {
+                            // 각 파트가 순수 숫자로 이루어져 있으면 앞쪽 0 제거 (예: 01 -> 1, 002 -> 2)
+                            if (/^\d+$/.test(part)) {
+                                return String(parseInt(part, 10));
+                            }
+                            return part;
+                        }).join('-');
+                    };
 
-            if (filteredParts.length === 0) {
-                container.innerHTML = '';
-                emptyState.classList.remove('hidden');
-            } else {
-                emptyState.classList.add('hidden');
-                
-                if (appState.viewMode === 'CARD') {
-                    container.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4";
-                    container.innerHTML = filteredParts.map(part => createPartCardHTML(part)).join('');
-                } else {
-                    container.className = "flex flex-col gap-2";
-                    container.innerHTML = filteredParts.map(part => createPartRowHTML(part)).join('');
+                    const parseCodeTokens = (str) => {
+                        // 알파벳+숫자 외 문자를 제거하고 세그먼트로 분리
+                        const parts = str.toLowerCase().trim().split(/[-_]+/).filter(Boolean);
+                        return parts.map(normalizeSegment);
+                    };
+
+                    const targetTokens = parseCodeTokens(code);
+
+                    // 폴더 내 전체 PDF 파일 스캔 및 매칭 파일 수집
+                    const matchedFiles = [];
+
+                    for await (const entry of drawingDirectoryHandle.values()) {
+                        if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.pdf')) {
+                            const fileNameWithoutExt = entry.name.substring(0, entry.name.length - 4);
+                            
+                            // 파일명에서 리비전 부분 추출 (예: "_01", "_00", "_02" 등)
+                            let revNum = -1;
+                            let baseNameStr = fileNameWithoutExt;
+
+                            const revMatch = fileNameWithoutExt.match(/(?:_|-)([0-9]{1,3})$/);
+                            if (revMatch) {
+                                revNum = parseInt(revMatch[1], 10);
+                                baseNameStr = fileNameWithoutExt.substring(0, revMatch.index);
+                            }
+
+                            const fileBaseTokens = parseCodeTokens(baseNameStr);
+                            const fullFileTokens = parseCodeTokens(fileNameWithoutExt);
+
+                            // 토큰 기반 엄격 일치 검사 (토큰 개수와 각 세그먼트 정규화 형태가 완벽히 같아야 함)
+                            const isBaseMatch = fileBaseTokens.length === targetTokens.length &&
+                                fileBaseTokens.every((token, idx) => token === targetTokens[idx]);
+
+                            const isFullMatch = fullFileTokens.length === targetTokens.length &&
+                                fullFileTokens.every((token, idx) => token === targetTokens[idx]);
+
+                            if (isBaseMatch || isFullMatch) {
+                                matchedFiles.push({
+                                    handle: entry,
+                                    fileName: entry.name,
+                                    revNum: revNum
+                                });
+                            }
+                        }
+                    }
+
+                    if (matchedFiles.length > 0) {
+                        // 리비전 번호가 가장 큰 파일(최신 버전) 순으로 정렬
+                        matchedFiles.sort((a, b) => b.revNum - a.revNum);
+                        const bestMatchFile = matchedFiles[0];
+
+                        const file = await bestMatchFile.handle.getFile();
+                        const fileUrl = URL.createObjectURL(file);
+                        
+                        // 새 탭에서 최신 리비전 PDF 열기
+                        window.open(fileUrl, '_blank');
+                        return;
+                    } else {
+                        // 조건에 맞는 파일이 하나도 없는 경우
+                        showDrawingNotice('도면 없음', `지정된 도면 폴더 [${drawingDirectoryHandle.name}] 내에 <strong>[${code}]</strong> 와(과) 일치하는 PDF 도면 파일을 찾을 수 없습니다.<br><span class="text-[11px] text-slate-400 mt-1 block">(검색 키워드: ${code})</span>`);
+                        return;
+                    }
+                } catch (err) {
+                    console.error('도면 검색 중 오류 발생:', err);
+                    showDrawingNotice('도면 없음', `지정된 도면 폴더 [${drawingDirectoryHandle.name}] 내에 <strong>[${expectedFileName}]</strong> 도면 파일을 읽는 도중 오류가 발생했습니다.`);
+                    return;
                 }
             }
-            lucide.createIcons();
+
+            // 폴더 미지정 상태 시 선택 안내
+            if ('showDirectoryPicker' in window) {
+                if (confirm(`도면 폴더가 아직 설정되지 않았습니다.\n도면이 저장된 폴더를 지정하시겠습니까?\n\n찾는 도면: [${expectedFileName}]`)) {
+                    await selectDrawingFolder();
+                    if (drawingDirectoryHandle) {
+                        openPartDrawing(partId);
+                    }
+                }
+            } else {
+                showDrawingNotice('도면 없음', `[${expectedFileName}] 도면을 열람하려면 먼저 도면 저장 폴더를 지정해야 합니다.`);
+            }
+        }
+
+        function showDrawingNotice(title, message) {
+            document.getElementById('drawingNoticeTitle').textContent = title;
+            document.getElementById('drawingNoticeMessage').innerHTML = message;
+            document.getElementById('drawingNoticeModal').classList.remove('hidden');
         }
 
         function createPartCardHTML(part) {
@@ -613,13 +699,18 @@
                             </span>
                         </div>
 
-                        <!-- 부품 주요 식별 정보: 도면번호, 품명, 품번 -->
+                        <!-- 부품 주요 식별 정보: 도면번호, 품명, 품번 (품번 클릭 시 도면 열기) -->
                         <div class="mt-2">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <h4 class="text-lg font-extrabold text-white tracking-tight">${part.drawingNo}</h4>
-                                <span class="text-lg font-bold font-mono text-amber-300 bg-slate-900 px-2 py-0.5 rounded-lg border border-amber-500/40 shadow-sm">
-                                    ${part.itemNo || '-'}
-                                </span>
+                                <button 
+                                    onclick="openPartDrawing('${part.id}')"
+                                    class="text-lg font-bold font-mono text-amber-300 bg-slate-900 hover:bg-amber-500/20 px-2 py-0.5 rounded-lg border border-amber-500/40 hover:border-amber-400 transition cursor-pointer flex items-center gap-1 shadow-sm group"
+                                    title="품번 터치 시 [단품코드.pdf] 도면 열기"
+                                >
+                                    <span>${part.itemNo || '-'}</span>
+                                    <i data-lucide="file-text" class="w-4 h-4 text-amber-400 opacity-60 group-hover:opacity-100 transition"></i>
+                                </button>
                             </div>
                             <p class="text-xs font-medium text-slate-300 mt-1">${part.partName}</p>
                         </div>
@@ -702,7 +793,10 @@
                         <div class="min-w-0">
                             <div class="flex items-center gap-2">
                                 <span class="font-bold text-white text-base truncate">${part.drawingNo}</span>
-                                <span class="text-base font-bold font-mono text-amber-300 bg-slate-900 px-1.5 py-0.5 rounded border border-amber-500/40">${part.itemNo || '-'}</span>
+                                <button onclick="openPartDrawing('${part.id}')" class="text-base font-bold font-mono text-amber-300 bg-slate-900 hover:bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/40 hover:border-amber-400 transition cursor-pointer flex items-center gap-1" title="품번 터치 시 [단품코드.pdf] 도면 열기">
+                                    <span>${part.itemNo || '-'}</span>
+                                    <i data-lucide="file-text" class="w-3.5 h-3.5 text-amber-400"></i>
+                                </button>
                             </div>
                             <p class="text-xs text-slate-400 truncate">${part.partName} [${part.location}]</p>
                         </div>
@@ -755,11 +849,13 @@
         }
 
         function setupEventListeners() {
-            document.getElementById('projectSelect').addEventListener('change', (e) => {
-                appState.currentProject = e.target.value;
-                saveData();
-                if (isFirebaseConnected) listenToProjectChanges();
-                renderApp();
+            document.getElementById('selectDrawingFolderBtn').addEventListener('click', selectDrawingFolder);
+            document.getElementById('closeDrawingNoticeBtn').addEventListener('click', () => {
+                document.getElementById('drawingNoticeModal').classList.add('hidden');
+            });
+            document.getElementById('changeDrawingFolderInNoticeBtn').addEventListener('click', () => {
+                document.getElementById('drawingNoticeModal').classList.add('hidden');
+                selectDrawingFolder();
             });
 
             // Firebase 클라우드 설정 모달 이벤트
@@ -970,6 +1066,133 @@
             });
         }
 
+        // 필수 핵심 함수 정의
+        function initProjectDropdown() {
+            const select = document.getElementById('projectSelect');
+            if (!select) return;
+            select.innerHTML = '';
+            
+            const projectKeys = Object.keys(appState.projects);
+            if (projectKeys.length === 0) {
+                appState.projects["NEW_PROJECT_01"] = [];
+                appState.currentProject = "NEW_PROJECT_01";
+                projectKeys.push("NEW_PROJECT_01");
+            }
+            if (!appState.projects[appState.currentProject]) {
+                appState.currentProject = projectKeys[0];
+            }
+
+            projectKeys.forEach(proj => {
+                const opt = document.createElement('option');
+                opt.value = proj;
+                opt.textContent = proj;
+                if (proj === appState.currentProject) opt.selected = true;
+                select.appendChild(opt);
+            });
+
+            select.onchange = (e) => {
+                appState.currentProject = e.target.value;
+                saveData();
+                renderApp();
+            };
+        }
+
+        function checkPartReady(part) {
+            const reqs = part.requiredProcesses || [];
+            // 1. 공정이 없는 부품: 최종 선별 완료(isCompleted) 상태면 즉시 부재준비완료
+            if (reqs.length === 0) {
+                return !!part.isCompleted;
+            }
+            // 2. 공정이 있는 부품: 모든 필요 공정이 완료되고 + 최종 선별 완료인 경우 부재준비완료
+            const allProcessesDone = reqs.every(procKey => part.processes && part.processes[procKey]);
+            return allProcessesDone && !!part.isCompleted;
+        }
+
+        function updateSyncBadge(isConnected, text) {
+            const badge = document.getElementById('syncBadge');
+            const statusText = document.getElementById('syncStatusText');
+            if (!badge || !statusText) return;
+
+            if (isConnected) {
+                badge.className = "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-medium";
+                statusText.textContent = text || "클라우드 실시간 동기화 중";
+            } else {
+                badge.className = "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-700/50 text-slate-400 border border-slate-600/50 text-xs font-medium";
+                statusText.textContent = text || "로컬 모드";
+            }
+        }
+
+        function renderApp() {
+            const container = document.getElementById('partsContainer');
+            const emptyState = document.getElementById('emptyState');
+            if (!container) return;
+
+            const currentParts = appState.projects[appState.currentProject] || [];
+            
+            // 필터 및 검색 적용
+            const filteredParts = currentParts.filter(part => {
+                // 검색어 체크
+                const query = appState.searchQuery.toLowerCase();
+                const matchSearch = !query || 
+                    (part.drawingNo && part.drawingNo.toLowerCase().includes(query)) ||
+                    (part.partName && part.partName.toLowerCase().includes(query)) ||
+                    (part.itemNo && part.itemNo.toLowerCase().includes(query)) ||
+                    (part.material && part.material.toLowerCase().includes(query)) ||
+                    (part.location && part.location.toLowerCase().includes(query));
+
+                // 상태 필터 체크
+                const isReady = checkPartReady(part);
+                let matchStatus = true;
+                if (appState.statusFilter === 'READY') matchStatus = isReady;
+                else if (appState.statusFilter === 'SELECTED') matchStatus = part.isCompleted;
+                else if (appState.statusFilter === 'PENDING') matchStatus = !isReady;
+
+                return matchSearch && matchStatus;
+            });
+
+            // 통계 갱신
+            const totalParts = currentParts.length;
+            const selectedParts = currentParts.filter(p => p.isCompleted).length;
+            const readyParts = currentParts.filter(p => checkPartReady(p)).length;
+
+            document.getElementById('statTotalParts').textContent = totalParts;
+            document.getElementById('statSelectedParts').textContent = selectedParts;
+            document.getElementById('statReadyParts').textContent = readyParts;
+
+            const progress = totalParts > 0 ? Math.round((readyParts / totalParts) * 100) : 0;
+            document.getElementById('progressPercent').textContent = `${progress}%`;
+            document.getElementById('progressBar').style.width = `${progress}%`;
+
+            // UI 렌더링
+            if (filteredParts.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+                if (appState.viewMode === 'CARD') {
+                    container.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4";
+                    container.innerHTML = filteredParts.map(createPartCardHTML).join('');
+                } else {
+                    container.className = "flex flex-col gap-2";
+                    container.innerHTML = filteredParts.map(createPartRowHTML).join('');
+                }
+            }
+
+            // 권한 뱃지 업데이트
+            const roleBadge = document.getElementById('roleBadge');
+            if (roleBadge) {
+                if (appState.userRole === 'SELECTOR') {
+                    roleBadge.className = "hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-semibold";
+                    roleBadge.innerHTML = `<i data-lucide="check-square" class="w-4 h-4"></i><span>선별자 작업 모드</span>`;
+                } else {
+                    roleBadge.className = "hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-semibold";
+                    roleBadge.innerHTML = `<i data-lucide="eye" class="w-4 h-4"></i><span>조회 전용 (Read Only)</span>`;
+                }
+            }
+
+            lucide.createIcons();
+        }
+
         // 스마트 엑셀 불러오기 (File System Access API 지원 시 파일 핸들 저장)
         async function handleImportClick() {
             if ('showOpenFilePicker' in window) {
@@ -1009,7 +1232,6 @@
         }
 
         function parseAndLoadExcel(file) {
-            // 파일명에서 확장자(.xlsx, .xls, .csv 등)를 제거하여 프로젝트명으로 생성
             const rawProjectName = file.name.replace(/\.[^/.]+$/, "").trim();
             const projectName = rawProjectName || "NEW_PROJECT";
 
@@ -1036,7 +1258,6 @@
                             }
                         });
                     } else if (isBlankProcStr) {
-                        // 공정란이 완전 빈칸인 경우 필요 공정 목록을 빈 배열([])로 고정
                         requiredProcesses = [];
                     } else {
                         // 2. 공정별 열(절단, MCT 등) 개별 확인
@@ -1068,10 +1289,29 @@
                     const totalQty = parseInt(row['총수량'] || row['수량'] || row['Qty'] || 1);
                     const selectedQty = isCompleted ? totalQty : parseInt(row['선별수량'] || 0);
 
+                    // 단품코드 읽기 (공백 및 특수 열명 유연 감지)
+                    let singleItemCode = '';
+                    const possibleCodeKeys = ['단품코드', '단품 코드', '단품', 'Item Code', 'ItemCode', 'SingleCode', 'Part Code'];
+                    for (const key of possibleCodeKeys) {
+                        if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== '') {
+                            singleItemCode = String(row[key]).trim();
+                            break;
+                        }
+                    }
+                    if (!singleItemCode) {
+                        // 대소문자나 공백 무시 비교
+                        const rowKeys = Object.keys(row);
+                        const matchedKey = rowKeys.find(k => k.replace(/\s+/g, '').includes('단품코드') || k.replace(/\s+/g, '').includes('ItemCode'));
+                        if (matchedKey && row[matchedKey]) {
+                            singleItemCode = String(row[matchedKey]).trim();
+                        }
+                    }
+
                     return {
                         id: `IMP_${Date.now()}_${idx}`,
                         material: row['자재구분'] || row['자재'] || row['재질'] || row['Material'] || 'PLATE',
                         itemNo: row['품번'] || row['Item No'] || row['Part Code'] || `ITEM-${idx + 1}`,
+                        singleItemCode: singleItemCode,
                         drawingNo: row['도면번호'] || row['도번'] || row['Part No'] || `PART-${idx + 1}`,
                         partName: row['품명'] || row['Part Name'] || '미지정',
                         location: row['위치(Location)'] || row['위치'] || row['Location'] || 'A-00',
@@ -1154,6 +1394,7 @@
                 const rowObj = {
                     '자재구분': p.material || 'PLATE',
                     '품번': p.itemNo || '-',
+                    '단품코드': p.singleItemCode || '-',
                     '도면번호': p.drawingNo,
                     '품명': p.partName,
                     '위치(Location)': p.location,
