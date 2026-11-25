@@ -9,7 +9,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
     <!-- SheetJS for Excel handling -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <!-- Lucide Icons -->
+    <!-- Lucide Icons (Fallback safe) -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <!-- Firebase SDK (v9/v10 Compat Mode) -->
@@ -55,19 +55,19 @@
             
             <!-- 앱 타이틀 및 프로젝트 선택 -->
             <div class="flex items-center gap-3">
-                <div class="bg-blue-600 p-2.5 rounded-xl shadow-md shadow-blue-500/20">
-                    <i data-lucide="layers" class="w-6 h-6 text-white"></i>
+                <div class="bg-blue-600 p-2.5 rounded-xl shadow-md shadow-blue-500/20 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
                 </div>
                 <div>
                     <div class="flex items-center gap-2">
                         <select id="projectSelect" class="bg-slate-700 text-white font-bold text-lg rounded-lg px-3 py-1 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
                             <!-- JS dynamic options -->
                         </select>
-                        <button id="addProjectBtn" class="bg-slate-700 hover:bg-slate-600 p-1.5 rounded-lg border border-slate-600 transition" title="새 프로젝트 추가">
-                            <i data-lucide="plus" class="w-5 h-5 text-blue-400"></i>
+                        <button id="addProjectBtn" class="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg border border-slate-600 transition flex items-center justify-center" title="새 프로젝트 추가">
+                            <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                         </button>
-                        <button id="deleteProjectBtn" class="bg-slate-700 hover:bg-rose-900/60 p-1.5 rounded-lg border border-slate-600 transition" title="현재 프로젝트 삭제">
-                            <i data-lucide="trash-2" class="w-5 h-5 text-rose-400"></i>
+                        <button id="deleteProjectBtn" class="bg-slate-700 hover:bg-rose-900/60 p-2 rounded-lg border border-slate-600 transition flex items-center justify-center" title="현재 프로젝트 삭제">
+                            <svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                         </button>
                     </div>
                     <p class="text-xs text-slate-400 mt-0.5">공정 진행 & 부재 선별 실시간 현황판</p>
@@ -101,31 +101,33 @@
                 </div>
 
                 <div id="roleBadge" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-semibold">
-                    <i data-lucide="eye" class="w-4 h-4"></i>
-                    <span>조회 전용 (Read Only)</span>
+                    <span>👁️ 조회 전용 (Read Only)</span>
                 </div>
-                <button id="authToggleBtn" class="bg-blue-600 hover:bg-blue-500 text-white font-medium px-3 py-1.5 rounded-lg text-xs shadow-md transition flex items-center gap-1">
-                    <i data-lucide="lock" class="w-3.5 h-3.5"></i>
+                <button id="authToggleBtn" class="bg-blue-600 hover:bg-blue-500 text-white font-medium px-3 py-1.5 rounded-lg text-xs shadow-md transition flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                     <span>권한 변경</span>
                 </button>
 
-                <!-- 도면 폴더 선택 버튼 추가 -->
-                <button id="selectDrawingFolderBtn" class="bg-amber-600/20 hover:bg-amber-600/30 p-2 rounded-lg border border-amber-500/50 text-amber-300 hover:text-amber-200 transition shadow-sm flex items-center gap-1" title="PDF 도면 저장 폴더 지정">
-                    <i data-lucide="folder-open" class="w-5 h-5"></i>
-                    <span class="text-xs font-bold hidden lg:inline" id="drawingFolderStatusText">도면폴더 설정</span>
+                <!-- 도면 폴더 선택 버튼 (내장 SVG 아이콘 적용) -->
+                <button id="selectDrawingFolderBtn" class="bg-amber-600/20 hover:bg-amber-600/30 px-2.5 py-2 rounded-lg border border-amber-500/50 text-amber-300 hover:text-amber-200 transition shadow-sm flex items-center gap-1.5" title="PDF 도면 저장 폴더 지정">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    <span class="text-xs font-bold" id="drawingFolderStatusText">도면폴더</span>
                 </button>
 
-                <!-- 클라우드 연동(구름 아이콘) 버튼 항상 노출 -->
-                <button id="cloudConfigBtn" class="bg-blue-600/20 hover:bg-blue-600/30 p-2 rounded-lg border border-blue-500/50 text-blue-300 hover:text-blue-200 transition shadow-sm" title="Firebase 클라우드 연동 설정 (방법 A)">
-                    <i data-lucide="cloud" class="w-5 h-5"></i>
+                <!-- 클라우드 연동(구름 아이콘) 버튼 (내장 SVG 아이콘 적용) -->
+                <button id="cloudConfigBtn" class="bg-blue-600/20 hover:bg-blue-600/30 px-2.5 py-2 rounded-lg border border-blue-500/50 text-blue-300 hover:text-blue-200 transition shadow-sm flex items-center gap-1" title="Firebase 클라우드 연동 설정">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+                    <span class="text-xs font-bold hidden sm:inline">동기화</span>
                 </button>
                 <div class="h-5 w-px bg-slate-700 mx-0.5"></div>
-                <button id="excelImportBtn" class="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg border border-slate-600 text-slate-200 transition" title="엑셀 불러오기">
-                    <i data-lucide="file-up" class="w-5 h-5"></i>
+                <button id="excelImportBtn" class="bg-slate-700 hover:bg-slate-600 px-2.5 py-2 rounded-lg border border-slate-600 text-slate-200 transition flex items-center gap-1" title="엑셀 불러오기">
+                    <svg class="w-4 h-4 shrink-0 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span class="text-xs font-medium hidden md:inline">불러오기</span>
                 </button>
                 <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" class="hidden">
-                <button id="excelExportBtn" class="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg border border-slate-600 text-slate-200 transition" title="엑셀 내보내기">
-                    <i data-lucide="file-down" class="w-5 h-5"></i>
+                <button id="excelExportBtn" class="bg-slate-700 hover:bg-slate-600 px-2.5 py-2 rounded-lg border border-slate-600 text-slate-200 transition flex items-center gap-1" title="엑셀 내보내기">
+                    <svg class="w-4 h-4 shrink-0 text-blue-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span class="text-xs font-medium hidden md:inline">내보내기</span>
                 </button>
             </div>
         </div>
@@ -149,7 +151,7 @@
             <!-- 검색 및 상태 필터 -->
             <div class="w-full md:w-auto flex items-center gap-2">
                 <div class="relative flex-1 md:w-64">
-                    <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                     <input type="text" id="searchInput" placeholder="도번, 품명, 품번, 자재구분, Location..." class="w-full bg-slate-900 border border-slate-700 text-slate-100 pl-9 pr-3 py-1.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
                 
@@ -160,9 +162,13 @@
                     <option value="PENDING">미완료 (진행중/대기)</option>
                 </select>
 
-                <div class="flex border border-slate-700 rounded-lg overflow-hidden bg-slate-900">
-                    <button id="viewCardBtn" class="p-1.5 bg-blue-600 text-white"><i data-lucide="grid" class="w-4 h-4"></i></button>
-                    <button id="viewListBtn" class="p-1.5 text-slate-400 hover:text-white"><i data-lucide="list" class="w-4 h-4"></i></button>
+                <div class="flex border border-slate-700 rounded-lg overflow-hidden bg-slate-900 shrink-0">
+                    <button id="viewCardBtn" class="p-2 bg-blue-600 text-white" title="카드 보기">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                    </button>
+                    <button id="viewListBtn" class="p-2 text-slate-400 hover:text-white" title="리스트 보기">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                    </button>
                 </div>
             </div>
         </div>
@@ -429,12 +435,12 @@
         let pendingImportData = null;
 
         document.addEventListener('DOMContentLoaded', () => {
-            initProjectDropdown();
-            initFirebaseFromStorage();
-            initDrawingFolderHandle();
-            renderApp();
-            setupEventListeners();
-            lucide.createIcons();
+            try { initProjectDropdown(); } catch (e) { console.error(e); }
+            try { initFirebaseFromStorage(); } catch (e) { console.error(e); }
+            try { initDrawingFolderHandle(); } catch (e) { console.error(e); }
+            try { setupEventListeners(); } catch (e) { console.error(e); }
+            try { renderApp(); } catch (e) { console.error(e); }
+            try { if (typeof lucide !== 'undefined') lucide.createIcons(); } catch (e) {}
         });
 
         function saveData() {
@@ -549,7 +555,25 @@
         function updateDrawingFolderUI(folderName) {
             const btnText = document.getElementById('drawingFolderStatusText');
             if (btnText) {
-                btnText.textContent = folderName ? `📁 ${folderName}` : '도면폴더 설정';
+                btnText.textContent = folderName ? folderName : '도면폴더';
+            }
+        }
+
+        // 사용자 폴더 선택 창 호출 (태블릿/모바일 호환 안내 포함)
+        async function selectDrawingFolder() {
+            if ('showDirectoryPicker' in window) {
+                try {
+                    const handle = await window.showDirectoryPicker();
+                    await saveDrawingFolderHandle(handle);
+                    showDrawingNotice('도면 폴더 설정 완료', `<strong>[${handle.name}]</strong> 폴더가 도면 저장소로 지정되었습니다.`);
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        console.error('Directory picker error:', err);
+                        showDrawingNotice('폴더 접근 안내', '현재 기기(모바일/태블릿 브라우저) 보안 정책상 폴더 통째로 자동 열람이 제한됩니다.<br><br>PC 웹 브라우저(Chrome/Edge)에서 사용하시면 품번 클릭 시 PDF 도면이 즉시 열립니다.');
+                    }
+                }
+            } else {
+                showDrawingNotice('모바일/태블릿 환경 안내', '현재 사용 중인 태블릿/모바일 브라우저 보안 정책상 로컬 폴더 자동 검색 기능을 지원하지 않습니다.<br><br>단, <strong>실시간 공정 체크 및 선별 완료 동기화</strong> 기능은 정상 작동합니다.');
             }
         }
 
@@ -674,14 +698,14 @@
 
             // 폴더 미지정 상태 시 선택 안내
             if ('showDirectoryPicker' in window) {
-                if (confirm(`도면 폴더가 아직 설정되지 않았습니다.\n도면이 저장된 폴더를 지정하시겠습니까?\n\n찾는 도면: [${expectedFileName}]`)) {
+                try {
                     await selectDrawingFolder();
                     if (drawingDirectoryHandle) {
                         openPartDrawing(partId);
                     }
-                }
+                } catch (e) {}
             } else {
-                showDrawingNotice('도면 없음', `[${expectedFileName}] 도면을 열람하려면 먼저 도면 저장 폴더를 지정해야 합니다.`);
+                showDrawingNotice('도면 열람 안내', `찾는 단품코드: <strong>[${code}]</strong><br><br>모바일/태블릿 브라우저 보안 정책상 로컬 폴더 내 PDF 자동 검색이 제한됩니다. PC(Chrome/Edge)에서 도면폴더 설정 후 열람해 주세요.`);
             }
         }
 
@@ -1199,11 +1223,15 @@
             if (roleBadge) {
                 if (appState.userRole === 'SELECTOR') {
                     roleBadge.className = "hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-semibold";
-                    roleBadge.innerHTML = `<i data-lucide="check-square" class="w-4 h-4"></i><span>선별자 작업 모드</span>`;
+                    roleBadge.innerHTML = `<span>✅ 선별자 작업 모드</span>`;
                 } else {
                     roleBadge.className = "hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-semibold";
-                    roleBadge.innerHTML = `<i data-lucide="eye" class="w-4 h-4"></i><span>조회 전용 (Read Only)</span>`;
+                    roleBadge.innerHTML = `<span>👁️ 조회 전용 (Read Only)</span>`;
                 }
+            }
+
+            try { if (typeof lucide !== 'undefined') lucide.createIcons(); } catch (e) {}
+        }
             }
 
             lucide.createIcons();
