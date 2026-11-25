@@ -107,10 +107,11 @@
                 </button>
 
                 <!-- 도면 폴더 선택 버튼 -->
-                <button id="selectDrawingFolderBtn" type="button" class="bg-amber-600/20 hover:bg-amber-600/30 px-2.5 py-2 rounded-lg border border-amber-500/50 text-amber-300 hover:text-amber-200 transition shadow-sm flex items-center gap-1.5" title="PDF 도면 저장 폴더 지정">
+                <button id="selectDrawingFolderBtn" type="button" class="bg-amber-600/20 hover:bg-amber-600/30 px-2.5 py-2 rounded-lg border border-amber-500/50 text-amber-300 hover:text-amber-200 transition shadow-sm flex items-center gap-1.5" title="PDF 도면 저장 폴더 또는 파일 일괄 지정">
                     <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                     <span class="text-xs font-bold" id="drawingFolderStatusText">도면폴더</span>
                 </button>
+                <input type="file" id="drawingFilesInput" accept=".pdf,application/pdf" multiple class="hidden">
 
                 <!-- 클라우드 연동(구름 아이콘) 버튼 -->
                 <button id="cloudConfigBtn" type="button" class="bg-blue-600/20 hover:bg-blue-600/30 px-2.5 py-2 rounded-lg border border-blue-500/50 text-blue-300 hover:text-blue-200 transition shadow-sm flex items-center gap-1" title="Firebase 클라우드 연동 설정">
@@ -344,7 +345,7 @@
             <div class="flex gap-2 justify-center">
                 <button id="changeDrawingFolderInNoticeBtn" type="button" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-xs font-semibold transition flex items-center gap-1">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                    <span>도면 폴더 지정</span>
+                    <span>도면 폴더/파일 지정</span>
                 </button>
                 <button id="closeDrawingNoticeBtn" type="button" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition shadow-md">
                     확인
@@ -429,11 +430,14 @@
 
         // Firebase 연동 상태 변수
         let db = null;
-        let unsubscribeSnapshot = null;
         let isFirebaseConnected = false;
+        let unsubscribeSnapshot = null;
 
-        // 도면 저장 폴더 DirectoryHandle 저장용
+        // 도면 저장 폴더 DirectoryHandle 저장용 (PC용)
         let drawingDirectoryHandle = null;
+
+        // 태블릿/모바일용 다중 선택 PDF 파일 저장소 (메모리 맵)
+        let loadedDrawingFiles = [];
 
         // 불러온 파일의 핸들 저장 (실제 덮어쓰기용)
         let currentFileHandle = null;
@@ -530,72 +534,152 @@
         // IndexedDB를 통해 도면 폴더 디렉토리 핸들 보존 및 복원
         async function getIndexedDB() {
             return new Promise((resolve, reject) => {
-                const request = indexedDB.open('SmartPartsStorageDB', 1);
+                const request = indexedDB.open('SmartPartsDrawingDB', 1);
                 request.onupgradeneeded = (e) => {
-                    const db = e.target.result;
-                    if (!db.objectStoreNames.contains('handles')) {
-                        db.createObjectStore('handles');
+                    const idb = e.target.result;
+                    if (!idb.objectStoreNames.contains('handles')) {
+                        idb.createObjectStore('handles');
                     }
                 };
-                request.onsuccess = () => resolve(request.result);
-                request.onerror = () => reject(request.error);
+                request.onsuccess = (e) => resolve(e.target.result);
+                request.onerror = (e) => reject(e.target.error);
             });
         }
 
         async function saveDrawingFolderHandle(handle) {
             try {
-                const db = await getIndexedDB();
-                const tx = db.transaction('handles', 'readwrite');
-                tx.objectStore('handles').put(handle, 'drawingFolderHandle');
+                const idb = await getIndexedDB();
+                const tx = idb.transaction('handles', 'readwrite');
+                tx.objectStore('handles').put(handle, 'drawingDir');
                 drawingDirectoryHandle = handle;
                 updateDrawingFolderUI(handle.name);
-            } catch (err) {
-                console.error('Directory handle save failed:', err);
+            } catch (e) {
+                console.warn('Folder handle save skipped:', e);
+                drawingDirectoryHandle = handle;
+                updateDrawingFolderUI(handle.name);
             }
         }
 
         async function initDrawingFolderHandle() {
             try {
-                const db = await getIndexedDB();
-                const tx = db.transaction('handles', 'readonly');
-                const req = tx.objectStore('handles').get('drawingFolderHandle');
+                const idb = await getIndexedDB();
+                const tx = idb.transaction('handles', 'readonly');
+                const req = tx.objectStore('handles').get('drawingDir');
                 req.onsuccess = async () => {
                     if (req.result) {
                         drawingDirectoryHandle = req.result;
                         updateDrawingFolderUI(drawingDirectoryHandle.name);
                     }
                 };
-            } catch (err) {
-                console.warn('Directory handle load skipped');
+            } catch (e) {
+                console.warn('Folder handle restore skipped:', e);
             }
         }
 
-        function updateDrawingFolderUI(folderName) {
+        function updateDrawingFolderUI(label) {
             const btnText = document.getElementById('drawingFolderStatusText');
             if (btnText) {
-                btnText.textContent = folderName ? folderName : '도면폴더';
+                btnText.textContent = label ? label : '도면폴더';
             }
         }
 
-        // 사용자 폴더 선택 창 호출
+        // 사용자 폴더(PC) 또는 다중 PDF 파일(태블릿/모바일) 선택 창 호출
         async function selectDrawingFolder() {
-            if ('showDirectoryPicker' in window) {
+            const isMobileOrTablet = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+            if (!isMobileOrTablet && 'showDirectoryPicker' in window) {
                 try {
                     const handle = await window.showDirectoryPicker();
+                    loadedDrawingFiles = []; // PC 폴더 모드 전환 시 모바일 파일 초기화
                     await saveDrawingFolderHandle(handle);
                     showAppMessage('도면 폴더 설정 완료', `<strong>[${handle.name}]</strong> 폴더가 도면 저장소로 지정되었습니다.`, true);
                 } catch (err) {
                     if (err.name !== 'AbortError') {
                         console.error('Directory picker error:', err);
-                        showAppMessage('폴더 접근 안내', '현재 기기(모바일/태블릿 브라우저) 보안 정책상 폴더 통째로 자동 열람이 제한됩니다.<br><br>PC 웹 브라우저(Chrome/Edge)에서 사용하시면 품번 클릭 시 PDF 도면이 즉시 열립니다.');
+                        document.getElementById('drawingFilesInput').click();
                     }
                 }
             } else {
-                showAppMessage('모바일/태블릿 환경 안내', '현재 사용 중인 태블릿/모바일 브라우저 보안 정책상 로컬 폴더 자동 검색 기능을 지원하지 않습니다.<br><br>단, <strong>실시간 공정 체크 및 선별 완료 동기화</strong> 기능은 정상 작동합니다.');
+                // 태블릿 및 모바일 환경: PDF 파일 일괄 선택기 호출
+                document.getElementById('drawingFilesInput').click();
             }
         }
 
-        // 품번 클릭 시 단품코드 기반 도면 열기
+        // 태블릿/모바일 다중 PDF 파일 선택 완료 처리
+        function handleDrawingFilesSelected(e) {
+            const files = Array.from(e.target.files || []).filter(f => f.name.toLowerCase().endsWith('.pdf'));
+            if (files.length > 0) {
+                loadedDrawingFiles = files;
+                drawingDirectoryHandle = null;
+                updateDrawingFolderUI(`도면 ${files.length}개`);
+                showAppMessage('도면 파일 불러오기 완료', `총 <strong>${files.length}개</strong>의 PDF 도면이 로드되었습니다.<br><span class="text-xs text-slate-400 mt-1 block">이제 파트리스트에서 노란색 [품번]을 터치하면 해당 도면이 즉시 열립니다.</span>`, true);
+            }
+            e.target.value = '';
+        }
+
+        // 단품코드 및 리비전 매칭 헬퍼 함수
+        function findBestMatchingDrawing(fileEntries, targetCode) {
+            const normalizeSegment = (seg) => {
+                return seg.split('-').map(part => {
+                    if (/^\d+$/.test(part)) {
+                        return String(parseInt(part, 10));
+                    }
+                    const numAlphaMatch = part.match(/^0*(\d+)([a-zA-Z]+.*)$/);
+                    if (numAlphaMatch) {
+                        return numAlphaMatch[1] + numAlphaMatch[2];
+                    }
+                    return part;
+                }).join('-');
+            };
+
+            const parseCodeTokens = (str) => {
+                const parts = str.toLowerCase().trim().split(/[-_]+/).filter(Boolean);
+                return parts.map(normalizeSegment);
+            };
+
+            const targetTokens = parseCodeTokens(targetCode);
+            const matched = [];
+
+            for (const item of fileEntries) {
+                const fileName = item.name;
+                if (!fileName.toLowerCase().endsWith('.pdf')) continue;
+
+                const fileNameWithoutExt = fileName.substring(0, fileName.length - 4);
+                let revNum = -1;
+                let baseNameStr = fileNameWithoutExt;
+
+                const revMatch = fileNameWithoutExt.match(/(?:_|-)([0-9]{1,3})$/);
+                if (revMatch) {
+                    revNum = parseInt(revMatch[1], 10);
+                    baseNameStr = fileNameWithoutExt.substring(0, revMatch.index);
+                }
+
+                const fileBaseTokens = parseCodeTokens(baseNameStr);
+                const fullFileTokens = parseCodeTokens(fileNameWithoutExt);
+
+                const isBaseMatch = fileBaseTokens.length === targetTokens.length &&
+                    fileBaseTokens.every((token, idx) => token === targetTokens[idx]);
+
+                const isFullMatch = fullFileTokens.length === targetTokens.length &&
+                    fullFileTokens.every((token, idx) => token === targetTokens[idx]);
+
+                if (isBaseMatch || isFullMatch) {
+                    matched.push({
+                        source: item.source,
+                        fileName: fileName,
+                        revNum: revNum
+                    });
+                }
+            }
+
+            if (matched.length > 0) {
+                matched.sort((a, b) => b.revNum - a.revNum);
+                return matched[0];
+            }
+            return null;
+        }
+
+        // 품번 클릭 시 단품코드 기반 도면 열기 (PC 폴더 + 태블릿 일괄 파일 모두 지원)
         async function openPartDrawing(partId) {
             const parts = appState.projects[appState.currentProject] || [];
             const part = parts.find(p => p.id === partId);
@@ -607,67 +691,33 @@
                 return;
             }
 
-            const expectedFileName = `${code}.pdf`;
+            // 1. 태블릿/모바일 다중 선택 파일 메모리에서 우선 검색
+            if (loadedDrawingFiles.length > 0) {
+                const entries = loadedDrawingFiles.map(f => ({ name: f.name, source: f }));
+                const bestMatch = findBestMatchingDrawing(entries, code);
+                if (bestMatch) {
+                    const fileUrl = URL.createObjectURL(bestMatch.source);
+                    window.open(fileUrl, '_blank');
+                    return;
+                } else {
+                    showAppMessage('도면 없음', `불러온 ${loadedDrawingFiles.length}개의 PDF 파일 중에 <strong>[${code}]</strong> 와(과) 일치하는 도면을 찾을 수 없습니다.`, true);
+                    return;
+                }
+            }
 
+            // 2. PC 폴더 핸들(DirectoryHandle)에서 검색
             if (drawingDirectoryHandle && 'getFileHandle' in drawingDirectoryHandle) {
                 try {
-                    const normalizeSegment = (seg) => {
-                        return seg.split('-').map(part => {
-                            if (/^\d+$/.test(part)) {
-                                return String(parseInt(part, 10));
-                            }
-                            const numAlphaMatch = part.match(/^0*(\d+)([a-zA-Z]+.*)$/);
-                            if (numAlphaMatch) {
-                                return numAlphaMatch[1] + numAlphaMatch[2];
-                            }
-                            return part;
-                        }).join('-');
-                    };
-
-                    const parseCodeTokens = (str) => {
-                        const parts = str.toLowerCase().trim().split(/[-_]+/).filter(Boolean);
-                        return parts.map(normalizeSegment);
-                    };
-
-                    const targetTokens = parseCodeTokens(code);
-                    const matchedFiles = [];
-
+                    const entries = [];
                     for await (const entry of drawingDirectoryHandle.values()) {
                         if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.pdf')) {
-                            const fileNameWithoutExt = entry.name.substring(0, entry.name.length - 4);
-                            
-                            let revNum = -1;
-                            let baseNameStr = fileNameWithoutExt;
-
-                            const revMatch = fileNameWithoutExt.match(/(?:_|-)([0-9]{1,3})$/);
-                            if (revMatch) {
-                                revNum = parseInt(revMatch[1], 10);
-                                baseNameStr = fileNameWithoutExt.substring(0, revMatch.index);
-                            }
-
-                            const fileBaseTokens = parseCodeTokens(baseNameStr);
-                            const fullFileTokens = parseCodeTokens(fileNameWithoutExt);
-
-                            const isBaseMatch = fileBaseTokens.length === targetTokens.length &&
-                                fileBaseTokens.every((token, idx) => token === targetTokens[idx]);
-
-                            const isFullMatch = fullFileTokens.length === targetTokens.length &&
-                                fullFileTokens.every((token, idx) => token === targetTokens[idx]);
-
-                            if (isBaseMatch || isFullMatch) {
-                                matchedFiles.push({
-                                    handle: entry,
-                                    fileName: entry.name,
-                                    revNum: revNum
-                                });
-                            }
+                            entries.push({ name: entry.name, source: entry });
                         }
                     }
 
-                    if (matchedFiles.length > 0) {
-                        matchedFiles.sort((a, b) => b.revNum - a.revNum);
-                        const bestMatchFile = matchedFiles[0];
-                        const file = await bestMatchFile.handle.getFile();
+                    const bestMatch = findBestMatchingDrawing(entries, code);
+                    if (bestMatch) {
+                        const file = await bestMatch.source.getFile();
                         const fileUrl = URL.createObjectURL(file);
                         window.open(fileUrl, '_blank');
                         return;
@@ -677,21 +727,17 @@
                     }
                 } catch (err) {
                     console.error('도면 검색 중 오류 발생:', err);
-                    showAppMessage('도면 읽기 오류', `지정된 도면 폴더 [${drawingDirectoryHandle.name}] 내에 <strong>[${expectedFileName}]</strong> 도면 파일을 읽는 도중 오류가 발생했습니다.`, true);
+                    showAppMessage('도면 읽기 오류', `지정된 도면 폴더 [${drawingDirectoryHandle.name}] 내의 도면 파일을 읽는 도중 오류가 발생했습니다. 폴더를 다시 지정해 주세요.`, true);
                     return;
                 }
             }
 
-            if ('showDirectoryPicker' in window) {
-                try {
-                    await selectDrawingFolder();
-                    if (drawingDirectoryHandle) {
-                        openPartDrawing(partId);
-                    }
-                } catch (e) {}
-            } else {
-                showAppMessage('도면 열람 안내', `찾는 단품코드: <strong>[${code}]</strong><br><br>모바일/태블릿 브라우저 보안 정책상 로컬 폴더 내 PDF 자동 검색이 제한됩니다. PC(Chrome/Edge)에서 도면폴더 설정 후 열람해 주세요.`);
-            }
+            // 3. 아직 도면 폴더/파일이 지정되지 않은 경우 안내 및 즉시 선택 유도
+            showAppMessage(
+                '도면 폴더/파일 미지정',
+                `찾는 단품코드: <strong>[${code}]</strong><br><br>아직 도면 파일이 연결되지 않았습니다.<br>아래 <strong>[도면 폴더/파일 지정]</strong> 버튼을 눌러 PC는 도면 폴더를, 태블릿은 다운받은 PDF 파일들을 선택해 주세요.`,
+                true
+            );
         }
 
         function createPartCardHTML(part) {
@@ -872,6 +918,7 @@
 
         function setupEventListeners() {
             document.getElementById('selectDrawingFolderBtn').addEventListener('click', selectDrawingFolder);
+            document.getElementById('drawingFilesInput').addEventListener('change', handleDrawingFilesSelected);
             document.getElementById('closeDrawingNoticeBtn').addEventListener('click', () => {
                 document.getElementById('drawingNoticeModal').classList.add('hidden');
             });
